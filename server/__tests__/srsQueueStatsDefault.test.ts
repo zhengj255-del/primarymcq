@@ -1,5 +1,6 @@
 import "./testDb";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { ensureBaseDisputed } from "./disputedFixture";
 import express from "express";
 import { createServer, type Server } from "node:http";
 import { sqlite } from "../storage";
@@ -95,6 +96,8 @@ async function queueStats(topic: string, disputedParam?: "0" | "1"): Promise<any
 }
 
 beforeAll(async () => {
+  // The shipped corpus may carry no base-disputed question (see disputedFixture.ts).
+  ensureBaseDisputed();
   const app = express();
   app.use(express.json({ limit: "10mb" }));
   const httpServer = createServer(app);

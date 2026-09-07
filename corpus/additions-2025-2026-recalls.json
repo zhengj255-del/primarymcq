@@ -9,7 +9,7 @@
    "records": 276,
    "keyedFromRecall": 256,
    "keyed": 276,
-   "disputed": 1
+   "disputed": 0
   },
   {
    "code": "26A",
@@ -753,17 +753,17 @@
    "topicName": "Clinical Measurement",
    "section": "2025.1 (P25A) RECALL",
    "parentCode": null,
-   "stem": "What does this EEG waveform most likely represent? [Figure: an EEG strip about 8 seconds long on a 50 µV scale showing continuous, irregular, fairly fast activity of moderate amplitude, with no slow waves, spindles or isoelectric periods.]",
+   "stem": "In a healthy, drug-free adult, the illustrated EEG shows continuous, irregular, low-voltage, high-frequency (>13 Hz) asynchronous activity. Concurrent EOG shows no rapid eye movements, and EMG shows preserved muscle tone. What state does this most likely represent?",
    "options": {
     "A": "REM sleep",
     "B": "Sedated",
     "C": "Awake",
     "D": "General anaesthesia"
    },
-   "answer": "B",
-   "reason": "Left unkeyed: the tracker's GPT audit could not settle this question (ambiguous), 2026-09-07 — the key below is the recallers' own and the audit would not confirm it. Adjudicator's note: The keyed answer B is not uniquely supported. The described waveform overlaps particularly with awake beta activity and REM sleep.\n\nTranscribed from a '2025 MCQ' Anki recall deck (taken to be the 2025.1 / P25A sitting: it shares almost nothing with the 2025.2 recall already in the corpus). Recall only — the answer, where present, is the deck author's and is unverified.\nDeck card 35.",
+   "answer": "C",
+   "reason": "Recalled key corrected, and explained, by the tracker's GPT audit (gpt-5.6-sol, prescribed-text grounded), 2026-09-07 — not examiner-verified.\n\nHigh-frequency, low-voltage, irregular asynchronous activity is characteristic of alert wakefulness. REM can produce a very similar EEG, but absent rapid eye movements and preserved muscle tone exclude REM (Guyton & Hall, p.717; Kam & Power, p.92). The original key, sedated, cannot be inferred from this waveform. With the repaired stem, awake is the single best answer.",
    "urls": [],
-   "disputed": true,
+   "disputed": false,
    "id": "clinical-measurement__25A-35"
   },
   {
@@ -10723,12 +10723,12 @@
   "from": "renton-tracker MCQ audit (server/mcqAudit.ts -> server/ai/mcqTriage.ts), applied per question id",
   "model": "gpt-5.6-sol",
   "date": "2026-09-07",
-  "exportedAt": "2026-09-07T07:12:44.275Z",
-  "overridesFolded": 298,
+  "exportedAt": "2026-09-07T14:20:23.250Z",
+  "overridesFolded": 299,
   "keyedFromRecall": 258,
   "keyed": 513,
   "answersSuppliedByAudit": 255,
-  "disputedByVerdict": 1,
+  "disputedByVerdict": 0,
   "note": "Answers marked in each reason are the audit's, grounded in the prescribed texts. No examiner has confirmed them."
  }
 }

@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sqlite, storage, todayISO } from "../storage";
+import { ensureBaseDisputed, clearBaseDisputed } from "./disputedFixture";
 import { registerRoutes, EXPORT_TABLES } from "../routes";
 import { installAuth } from "../auth";
 import { installBodyParsers, safeErrorFields } from "../bodyParsers";
@@ -118,19 +119,30 @@ describe("open endpoints", () => {
 // ---------------------------------------------------------------------------
 describe("corpus reads", () => {
   it("GET /api/mcqs/stats has the McqStats shape", async () => {
-    const res = await api("/api/mcqs/stats");
-    expect(res.status).toBe(200);
-    const s = await res.json();
-    expect(Object.keys(s).sort()).toEqual(["byTopic", "disputed", "papers", "total", "withAnswer"]);
-    expect(s.total).toBeGreaterThan(1800);
-    expect(s.withAnswer).toBeLessThan(s.total);
-    expect(s.disputed).toBeGreaterThan(0);
-    const gi = s.byTopic.find((t: any) => t.slug === TOPIC);
-    expect(gi).toMatchObject({ slug: TOPIC, name: expect.any(String), domain: expect.any(String), count: topicTotal });
-    expect(typeof gi.linked).toBe("number");
-    expect(s.papers.length).toBeGreaterThan(0);
-    for (const p of s.papers) {
-      expect(Object.keys(p).sort()).toEqual(["count", "sittable", "sittableWithDisputed", "tag"]);
+    // The corpus is the tracker's curated copy: it may arrive with every
+    // question keyed and no dispute open, so neither "some keyless" nor "some
+    // disputed" is a fact about the data any more. Seed the dispute for this
+    // one read and put the corpus back; the count is checked against what was
+    // seeded, not against a number the file happened to ship with.
+    const seeded = ensureBaseDisputed(TOPIC);
+    try {
+      const res = await api("/api/mcqs/stats");
+      expect(res.status).toBe(200);
+      const s = await res.json();
+      expect(Object.keys(s).sort()).toEqual(["byTopic", "disputed", "papers", "total", "withAnswer"]);
+      expect(s.total).toBeGreaterThan(1800);
+      expect(s.withAnswer).toBeGreaterThan(0);
+      expect(s.withAnswer).toBeLessThanOrEqual(s.total);
+      expect(s.disputed).toBeGreaterThanOrEqual(seeded.ids.length);
+      const gi = s.byTopic.find((t: any) => t.slug === TOPIC);
+      expect(gi).toMatchObject({ slug: TOPIC, name: expect.any(String), domain: expect.any(String), count: topicTotal });
+      expect(typeof gi.linked).toBe("number");
+      expect(s.papers.length).toBeGreaterThan(0);
+      for (const p of s.papers) {
+        expect(Object.keys(p).sort()).toEqual(["count", "sittable", "sittableWithDisputed", "tag"]);
+      }
+    } finally {
+      clearBaseDisputed(seeded.marked);
     }
   });
 
@@ -320,14 +332,21 @@ describe("route order: literal /api/mcqs/... paths answer before the :id wildcar
   });
 
   it("GET /api/mcqs/triage is the queue, with counts and rows only", async () => {
-    const res = await api("/api/mcqs/triage");
-    expect(res.status).toBe(200);
-    const t = await res.json();
-    expect(Object.keys(t).sort()).toEqual(["counts", "items"]);
-    expect(Object.keys(t.counts).sort()).toEqual(["accepted", "discarded", "fixed", "pending", "total"]);
-    expect(t.items.length).toBe(t.counts.total);
-    expect(t.counts.pending).toBeGreaterThan(0);
-    expect(t.items.every((m: any) => typeof m.triageStatus === "string")).toBe(true);
+    // A queue with nothing in it proves nothing about the route; seed a dispute
+    // so there is a pending row to come back, then put the corpus back.
+    const seeded = ensureBaseDisputed(TOPIC);
+    try {
+      const res = await api("/api/mcqs/triage");
+      expect(res.status).toBe(200);
+      const t = await res.json();
+      expect(Object.keys(t).sort()).toEqual(["counts", "items"]);
+      expect(Object.keys(t.counts).sort()).toEqual(["accepted", "discarded", "fixed", "pending", "total"]);
+      expect(t.items.length).toBe(t.counts.total);
+      expect(t.counts.pending).toBeGreaterThanOrEqual(seeded.ids.length);
+      expect(t.items.every((m: any) => typeof m.triageStatus === "string")).toBe(true);
+    } finally {
+      clearBaseDisputed(seeded.marked);
+    }
   });
 
   it("the other literal paths answer too", async () => {
