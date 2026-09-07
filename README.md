@@ -145,7 +145,7 @@ Types for the request and response shapes are in `shared/schema.ts`.
 
 ## The corpus
 
-`server/data/mcqs.json` (1853 questions) is a **copy** of the tracker's `server/data/mcqs.json`, taken on 2026-09-06. To refresh it, copy the tracker's file over this repository's `server/data/mcqs.json` and push; the deploy workflow does the rest. At boot the server hashes the file; when the hash differs from the one stored in `mcq_meta` it wipes and re-ingests `mcqs` and `mcq_lo_links` (learning-objective links are re-derived). Everything keyed by question id — edits in `mcq_overrides`, attempts, SRS state, sessions — is untouched, so progress survives a refresh as long as question ids stay stable. `client/public/mcq-figures/*.svg` are the figures some questions reference; copy new ones across too if the corpus gains any.
+`server/data/mcqs.json` (2366 questions) is the tracker's `server/data/mcqs.json` as taken on 2026-09-06 (1853 questions) plus the recalled sittings in `corpus/additions-2025-2026-recalls.json` (513 questions from the 2025.1, 2026.1 and 2026.2 papers; see `corpus/README.md`). To refresh it from the tracker, copy the tracker's file over this repository's `server/data/mcqs.json`, re-run `node corpus/merge-additions.mjs corpus/additions-2025-2026-recalls.json server/data/mcqs.json` (a no-op if the tracker already carries the additions), and push; the deploy workflow does the rest. At boot the server hashes the file; when the hash differs from the one stored in `mcq_meta` it wipes and re-ingests `mcqs` and `mcq_lo_links` (learning-objective links are re-derived). Everything keyed by question id — edits in `mcq_overrides`, attempts, SRS state, sessions — is untouched, so progress survives a refresh as long as question ids stay stable. `client/public/mcq-figures/*.svg` are the figures some questions reference; copy new ones across too if the corpus gains any.
 
 ## Layout
 
@@ -167,6 +167,7 @@ Types for the request and response shapes are in `shared/schema.ts`.
     data/mcqs.json   the corpus
     __tests__/       vitest (server)
   shared/schema.ts   types and zod schemas shared by client and server
+  corpus/            recalled sittings as mcqs.json records, plus the script that merges them (corpus/README.md)
   script/build.ts    production build
   .github/workflows/deploy.yml  test + deploy
   Dockerfile, fly.toml, .env.example
