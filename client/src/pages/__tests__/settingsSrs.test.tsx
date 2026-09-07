@@ -48,7 +48,6 @@ function stub(opts: { patchError?: (body: Record<string, unknown>) => string | n
     else if (path.endsWith("/api/auth/status")) body = { required: true, authed: true };
     else if (path.endsWith("/api/mcqs/reset")) body = { ok: true, deletedAttempts: 3, deletedSrsState: 2, deletedSessions: 1 };
     else if (path.endsWith("/api/logout")) body = { ok: true };
-    else if (path.endsWith("/api/import")) body = { ok: true, restored: { settings: 1, mcq_attempts: 2 } };
     return { ok: status < 400, status, async json() { return body; }, async text() { return JSON.stringify(body); } } as any;
   }));
   return { patches, calls };
@@ -201,14 +200,7 @@ describe("Settings — reset MCQ progress", () => {
   });
 });
 
-describe("Settings — backup and sign-out", () => {
-  it("the backup download is a plain link to /api/export", async () => {
-    stub();
-    mount();
-    const link = (await screen.findByTestId("link-download-backup")) as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toMatch(/\/api\/export$/);
-  });
-
+describe("Settings — sign-out", () => {
   it("Sign out POSTs /api/logout", async () => {
     const { calls } = stub();
     mount();
@@ -218,37 +210,22 @@ describe("Settings — backup and sign-out", () => {
 });
 
 // A sitting snapshotted in this tab refers to a session row. Reset wipes the
-// rows and Restore replaces them, so afterwards the snapshot points at a
-// session the server cannot finish — both must drop it.
+// rows, so afterwards the snapshot points at a session the server cannot
+// finish — it must be dropped.
 const SNAPSHOT: StudySnapshot = {
   session: { sessionId: "sess-doomed", mode: "tutor", mcqs: [{ id: "Q1" }] as any, timeLimitSec: null } as any,
   idx: 0,
   answered: [],
   sessionStartMs: Date.now(),
 };
-const BACKUP = { version: 1, app: "mcq-site", exportedAt: "2026-09-07T00:00:00.000Z", tables: { settings: [SETTINGS], mcq_attempts: [{}, {}] } };
 
-describe("Settings — reset and restore drop the Study snapshot", () => {
+describe("Settings — reset drops the Study snapshot", () => {
   it("Reset MCQ progress clears it", async () => {
     stub();
     saveStudySnapshot(SNAPSHOT);
     mount();
     fireEvent.click(await screen.findByTestId("button-reset-mcq"));
     fireEvent.click(await screen.findByTestId("button-reset-mcq-confirm"));
-    await waitFor(() => expect(loadStudySnapshot()).toBeNull());
-  });
-
-  it("Restore from backup clears it", async () => {
-    const { calls } = stub();
-    saveStudySnapshot(SNAPSHOT);
-    mount();
-    const input = (await screen.findByTestId("input-restore-file")) as HTMLInputElement;
-    const file = new File([JSON.stringify(BACKUP)], "mcq-backup-2026-09-07.json", { type: "application/json" });
-    // jsdom's File has no text(); the page reads the file with it.
-    Object.defineProperty(file, "text", { value: async () => JSON.stringify(BACKUP) });
-    fireEvent.change(input, { target: { files: [file] } });
-    fireEvent.click(await screen.findByTestId("button-restore-confirm"));
-    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.includes("/api/import?confirm=YES"))).toBe(true));
     await waitFor(() => expect(loadStudySnapshot()).toBeNull());
   });
 });

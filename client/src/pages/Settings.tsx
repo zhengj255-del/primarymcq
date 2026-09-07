@@ -1,30 +1,22 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest, apiErrorText, API_BASE } from "@/lib/queryClient";
-import { useRef, useState } from "react";
+import { queryClient, apiRequest, apiErrorText } from "@/lib/queryClient";
+import { useState } from "react";
 import type { Settings } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Download, Upload, LogOut, Loader2 } from "lucide-react";
+import { Save, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { clearStudySnapshot } from "@/pages/Study";
 import { markDeliberateSignOut } from "@/lib/signOut";
 
 // -----------------------------------------------------------------------------
-// Settings — the FSRS dials, the progress reset, backup/restore, and sign-out.
+// Settings — the FSRS dials, the progress reset, and sign-out.
 // One settings row (id = 1) on the server; PATCH /api/settings takes only the
 // fields that changed.
 // -----------------------------------------------------------------------------
-
-/** What GET /api/export produces — and the only thing POST /api/import takes. */
-interface BackupFile {
-  version: number;
-  app: string;
-  exportedAt?: string;
-  tables: Record<string, unknown[]>;
-}
 
 export default function SettingsPage() {
   const { data: settings, isError: settingsError } = useQuery<Settings>({ queryKey: ["/api/settings"] });
@@ -132,58 +124,6 @@ export default function SettingsPage() {
     },
   });
 
-  // Restore from a backup file. Two steps on purpose: picking the file only
-  // READS it (and says what it holds); the overwrite happens on an explicit
-  // confirm, the same arm-then-confirm shape as the reset above.
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [pendingRestore, setPendingRestore] = useState<{ name: string; backup: BackupFile } | null>(null);
-  const [readError, setReadError] = useState<string | null>(null);
-  const onPickBackup = async (file: File | undefined) => {
-    setReadError(null);
-    setPendingRestore(null);
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as BackupFile;
-      // A cheap local shape check so an obviously wrong file (another app's
-      // dump, a CSV, a truncated download) is refused before the confirm step
-      // rather than after it. The server re-validates on import.
-      if (!parsed || typeof parsed !== "object" || parsed.version !== 1 || parsed.app !== "mcq-site"
-          || !parsed.tables || typeof parsed.tables !== "object") {
-        setReadError("That file is not an MCQ Study backup.");
-        return;
-      }
-      setPendingRestore({ name: file.name, backup: parsed });
-    } catch {
-      setReadError("Couldn't read that file as JSON.");
-    }
-  };
-  const cancelRestore = () => {
-    setPendingRestore(null);
-    setReadError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-  const restore = useMutation({
-    mutationFn: async (backup: BackupFile) =>
-      (await apiRequest("POST", "/api/import?confirm=YES", backup)).json() as Promise<{ ok: boolean; restored: Record<string, number> }>,
-    onSuccess: (r) => {
-      cancelRestore();
-      // mcq_study_sessions was replaced wholesale, so a sitting snapshotted in
-      // this tab refers to a session id that no longer exists (same reasoning
-      // as the reset above).
-      clearStudySnapshot();
-      // Every table this app reads was just replaced — nothing cached is true
-      // any more.
-      queryClient.invalidateQueries();
-      const rows = Object.values(r.restored ?? {}).reduce((a, n) => a + n, 0);
-      toast({
-        title: "Backup restored",
-        description: `${rows} row${rows === 1 ? "" : "s"} across ${Object.keys(r.restored ?? {}).length} table${Object.keys(r.restored ?? {}).length === 1 ? "" : "s"}.`,
-      });
-    },
-    onError: (e: any) => toast({ variant: "destructive", title: "Restore failed", description: apiErrorText(e) }),
-  });
-
   const signOut = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/logout")).json(),
     // A fresh start, not a lost session: the next person at this browser must
@@ -206,11 +146,6 @@ export default function SettingsPage() {
     </div>
   );
   if (!settings) return <div className="p-6">Loading...</div>;
-
-  const restoreTables = pendingRestore
-    ? Object.entries(pendingRestore.backup.tables).filter(([, rows]) => Array.isArray(rows))
-    : [];
-  const restoreRows = restoreTables.reduce((a, [, rows]) => a + (rows as unknown[]).length, 0);
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
@@ -322,70 +257,6 @@ export default function SettingsPage() {
               <Button variant="outline" size="sm" onClick={() => setResetArmed(true)} data-testid="button-reset-mcq">
                 Reset MCQ progress…
               </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Backup</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">
-              A backup is one JSON file with your settings, MCQ edits and dispute verdicts, every attempt,
-              the SRS schedule and your study sessions. The question bank itself is not included — it ships
-              with the app.
-            </div>
-            {/* A real link, not a fetch: the browser saves the response under
-                the server's Content-Disposition filename. */}
-            <Button asChild variant="outline" size="sm">
-              <a href={`${API_BASE}/api/export`} download data-testid="link-download-backup">
-                <Download className="h-4 w-4 mr-2" /> Download backup
-              </a>
-            </Button>
-          </div>
-
-          <div className="space-y-2 rounded-lg border border-destructive/40 p-3">
-            <div className="text-sm font-medium">Restore from backup…</div>
-            <div className="text-xs text-muted-foreground">
-              Replaces everything listed above with the file's contents — what is on this server now is
-              gone. Only a backup made by MCQ Study is accepted.
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="block text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground"
-              onChange={(e) => void onPickBackup(e.target.files?.[0])}
-              disabled={restore.isPending}
-              data-testid="input-restore-file"
-            />
-            {readError && (
-              <div className="text-xs text-destructive" data-testid="text-restore-error">{readError}</div>
-            )}
-            {pendingRestore && (
-              <div className="space-y-2" data-testid="panel-restore-confirm">
-                <div className="text-xs">
-                  <span className="font-medium">{pendingRestore.name}</span>
-                  {pendingRestore.backup.exportedAt ? ` · exported ${new Date(pendingRestore.backup.exportedAt).toLocaleString()}` : ""}
-                  {` · ${restoreRows} row${restoreRows === 1 ? "" : "s"} in ${restoreTables.length} table${restoreTables.length === 1 ? "" : "s"}`}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => restore.mutate(pendingRestore.backup)}
-                    disabled={restore.isPending}
-                    data-testid="button-restore-confirm"
-                  >
-                    {restore.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                    {restore.isPending ? "Restoring…" : "Yes, overwrite with this backup"}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={cancelRestore} disabled={restore.isPending} data-testid="button-restore-cancel">
-                    Cancel
-                  </Button>
-                </div>
-              </div>
             )}
           </div>
         </CardContent>
