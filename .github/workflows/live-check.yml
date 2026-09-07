@@ -1,0 +1,78 @@
+name: "Live check (dispatch only)"
+
+# Ask the DEPLOYED site what it is serving, and compare that with the corpus in
+# this repository. Read-only: it fetches /api/mcqs/stats and nothing else.
+#
+# Exists because "the deploy went green" and "the site shows the new bank" are
+# two different facts. The deploy workflow proves the build shipped; only the
+# running server can say what its boot re-ingest actually loaded. Run this after
+# a corpus refresh, or whenever the numbers on the site look wrong.
+#
+# If the site has APP_PASSWORD set, the stats endpoint is behind the login gate;
+# this logs in with the repository secret MCQ_APP_PASSWORD (the same secret the
+# deploy workflow offers to install) and retries. Without that secret on a
+# gated site the check cannot see past the gate, and says so.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    name: Compare the live site with this repository's corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: What this repository's corpus says
+        run: |
+          set -euo pipefail
+          node -e '
+            const c = require("./server/data/mcqs.json");
+            const keyed = c.filter((q) => q.answer).length;
+            const disputed = c.filter((q) => q.disputed).length;
+            console.log(`repo corpus: ${c.length} questions, ${keyed} with a key, ${disputed} disputed`);
+            require("fs").writeFileSync("expected.json", JSON.stringify({ total: c.length, withAnswer: keyed, disputed }));
+          '
+
+      - name: What the live site says
+        env:
+          BASE: https://primarymcq.fly.dev
+          MCQ_APP_PASSWORD: ${{ secrets.MCQ_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "healthz: $(curl -sS --max-time 20 "$BASE/api/healthz")"
+          code=$(curl -sS --max-time 20 -o stats.json -w '%{http_code}' "$BASE/api/mcqs/stats")
+          if [ "$code" = "401" ]; then
+            echo "the site is password-gated"
+            if [ -z "${MCQ_APP_PASSWORD:-}" ]; then
+              echo "::error::stats are behind the login gate and the repository secret MCQ_APP_PASSWORD is not set — cannot see past it"
+              exit 1
+            fi
+            login=$(curl -sS --max-time 20 -c jar -o /dev/null -w '%{http_code}' \
+              -H 'content-type: application/json' \
+              --data "$(node -e 'console.log(JSON.stringify({ password: process.env.MCQ_APP_PASSWORD }))')" \
+              "$BASE/api/login")
+            echo "login: HTTP $login"
+            code=$(curl -sS --max-time 20 -b jar -o stats.json -w '%{http_code}' "$BASE/api/mcqs/stats")
+          fi
+          echo "stats: HTTP $code"
+          if [ "$code" != "200" ]; then echo "::error::/api/mcqs/stats answered $code"; head -c 300 stats.json; exit 1; fi
+          jq '{total, withAnswer, disputed}' stats.json
+
+      - name: Do they agree?
+        run: |
+          set -euo pipefail
+          live=$(jq -c '{total, withAnswer, disputed}' stats.json)
+          want=$(jq -c '.' expected.json)
+          echo "live:     $live"
+          echo "expected: $want"
+          if [ "$live" = "$want" ]; then
+            echo "LIVE SITE MATCHES THE REPOSITORY: $live"
+          else
+            echo "::error::the live site does not match this repository's corpus — has the deploy finished, and did the boot re-ingest run?"
+            exit 1
+          fi
