@@ -27,6 +27,16 @@ import {
   settingsPatchSchema, sessionFiltersSchema, submitAttemptSchema, srsRateSchema,
   mcqEditSchema, mcqTriageSchema,
 } from "@shared/schema";
+// The AI quality machinery: the adjudicator, the corpus sweep built on it, and
+// the bulk lane the Disputes page borrows from the sweep. Every route below
+// that reaches the model 503s cleanly when OPENAI_API_KEY is unset.
+import {
+  mcqAuditStatus, listMcqAudit, kickAudit, requestAuditStop, isAuditing,
+  applyMcqAudit, applyAllMcqAudit, dismissMcqAudit, reopenMcqAudit, markMcqAuditFixed, type McqAuditBand,
+  resolveAllDisputes, disputeAdjudications,
+} from "./mcqAudit";
+import { triageMcq } from "./ai/mcqTriage";
+import { hasApiKey, REASONING_EFFORTS, type ReasoningEffort } from "./ai/llm";
 
 // -----------------------------------------------------------------------------
 // The tables a backup carries, in ONE place.
@@ -46,6 +56,11 @@ export const EXPORT_TABLES = [
   "mcq_srs_undo",
   "mcq_srs_extra_new",
   "mcq_study_sessions",
+  // The AI sweep's verdicts (server/mcqAudit.ts). Hours of model calls and
+  // the owner's apply/dismiss decisions — the fixes themselves already live in
+  // mcq_overrides above, but losing the verdict ledger on a restore would mean
+  // re-auditing the whole bank to find out which rows were handled.
+  "mcq_audit",
 ] as const;
 
 /** The tag every export carries and every import checks — a dump from any
@@ -292,7 +307,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Every base-disputed MCQ with its triage status + counts. Registered
   // before /api/mcqs/:id so "triage" isn't swallowed as an id.
   app.get("/api/mcqs/triage", (_req, res) => {
-    res.json(listDisputeTriage());
+    // adjudications: fresh stored verdicts for the disputed pile, so the page
+    // can badge each pending row and put an honest number on Resolve all —
+    // computed by the SAME predicates resolveAllDisputes acts with.
+    res.json({ ...listDisputeTriage(), adjudications: disputeAdjudications() });
+  });
+
+  // Adjudicate the pending disputes with the shared examiner pipeline — the
+  // audit sweep scoped to disputed questions only (each is prompted with the
+  // DISPUTE framing, which is literally true for them). Verdicts land in
+  // mcq_audit like any sweep's; progress is the same /api/mcqs/audit/status.
+  app.post("/api/mcqs/triage/adjudicate", (req, res) => {
+    if (!hasApiKey()) return res.status(503).json({ error: "AI not configured (OPENAI_API_KEY missing)" });
+    const topic = typeof req.body?.topic === "string" && req.body.topic ? req.body.topic : undefined;
+    if (!kickAudit({ topic, disputedOnly: true })) return res.status(409).json({ error: "An audit run is already in progress" });
+    res.json({ kicked: true });
+  });
+
+  // Bulk-resolve adjudicated disputes: accept confirm_key (flag cleared,
+  // content untouched), apply change_answer through the one apply path,
+  // leave ambiguous/flawed for the human. Refused while a sweep is writing
+  // verdicts, same as bulk approve.
+  app.post("/api/mcqs/triage/resolve-all", (req, res) => {
+    if (isAuditing()) return res.status(409).json({ error: "An audit run is in progress — resolve once it finishes." });
+    const topic = typeof req.body?.topic === "string" && req.body.topic ? req.body.topic : undefined;
+    res.json(resolveAllDisputes({ topic }));
   });
 
   // One triage decision: accept (dispute is noise, content stands), fix
@@ -308,6 +347,103 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     if (!result) return res.status(404).json({ error: "MCQ not found" });
     res.json(result);
+  });
+
+  // AI adjudication for one MCQ. Read-only: the reasoning model independently
+  // works the question and returns a suggested verdict/answer/explanation. It
+  // writes NOTHING — the user reviews it in the edit dialog and saves through
+  // PATCH /api/mcqs/:id. 503s cleanly without a key.
+  app.post("/api/mcqs/:id/triage-suggest", async (req, res) => {
+    if (!hasApiKey()) return res.status(503).json({ error: "AI not configured (OPENAI_API_KEY missing)" });
+    const item = getMcq(decodeURIComponent(req.params.id));
+    if (!item) return res.status(404).json({ error: "MCQ not found" });
+    // ?mode=audit when the caller is the Quality page. The default dispute
+    // framing opens with "someone believes the keyed answer is wrong", which
+    // primes the model to hunt for a change — the exact bias AUDIT_SYSTEM was
+    // written to remove. Asking for a second opinion on a question nobody
+    // disputed must not silently use the adversarial prompt.
+    const mode = req.query.mode === "audit" ? "audit" as const : "dispute" as const;
+    // ?effort=max — the "suggest with max effort" option: same adjudication,
+    // top reasoning rung. An unknown token is a 400, not a silent default: a
+    // typo'd client would otherwise read a cheap verdict as a max-effort one.
+    let effort: ReasoningEffort | undefined;
+    if (typeof req.query.effort === "string" && req.query.effort) {
+      if (!(REASONING_EFFORTS as readonly string[]).includes(req.query.effort)) {
+        return res.status(400).json({ error: `Unknown effort "${req.query.effort}" — expected one of ${REASONING_EFFORTS.join(", ")}` });
+      }
+      effort = req.query.effort as ReasoningEffort;
+    }
+    try {
+      const suggestion = await triageMcq({
+        mode,
+        effort,
+        code: item.displayCode,
+        topicName: item.topicName,
+        domain: item.domain,
+        stem: item.stem,
+        options: Object.entries(item.options).map(([key, text]) => ({ key, text: String(text) })),
+        currentAnswer: item.answer ?? null,
+        currentReason: item.reason ?? "",
+        loCodes: item.loCodes,
+      });
+      res.json(suggestion);
+    } catch (e: any) {
+      res.status(502).json({ error: `AI suggestion failed: ${e?.message || e}` });
+    }
+  });
+
+  // ----- Corpus audit (Quality page) -----
+  // Kick an AI sweep over every non-discarded question, poll status, review
+  // verdicts by band, apply or dismiss each suggestion. Registered before
+  // /api/mcqs/:id so "audit" isn't swallowed as an id.
+  app.get("/api/mcqs/audit/status", (req, res) => {
+    const topic = typeof req.query.topic === "string" && req.query.topic ? req.query.topic : undefined;
+    res.json(mcqAuditStatus(topic));
+  });
+  app.get("/api/mcqs/audit", (req, res) => {
+    const topic = typeof req.query.topic === "string" && req.query.topic ? req.query.topic : undefined;
+    const band = typeof req.query.band === "string" && ["poor", "weak", "good", "handled"].includes(req.query.band)
+      ? (req.query.band as McqAuditBand)
+      : undefined;
+    const limit = Number(req.query.limit);
+    res.json(listMcqAudit({ band, topic, limit: Number.isFinite(limit) ? limit : undefined }));
+  });
+  app.post("/api/mcqs/audit/run", (req, res) => {
+    if (!hasApiKey()) return res.status(503).json({ error: "AI not configured (OPENAI_API_KEY missing)" });
+    const topic = typeof req.body?.topic === "string" && req.body.topic ? req.body.topic : undefined;
+    if (!kickAudit({ topic })) return res.status(409).json({ error: "An audit run is already in progress" });
+    res.json({ kicked: true });
+  });
+  app.post("/api/mcqs/audit/stop", (_req, res) => {
+    res.json({ stopping: requestAuditStop() });
+  });
+  // Bulk approve — apply every applicable suggestion in scope in one action.
+  // Refused while a sweep is writing verdicts, so the pile being approved
+  // can't change mid-approval.
+  app.post("/api/mcqs/audit/apply-all", (req, res) => {
+    if (isAuditing()) return res.status(409).json({ error: "An audit run is in progress — approve once it finishes." });
+    const topic = typeof req.body?.topic === "string" && req.body.topic ? req.body.topic : undefined;
+    res.json(applyAllMcqAudit({ topic }));
+  });
+  app.post("/api/mcqs/:id/audit-apply", (req, res) => {
+    const result = applyMcqAudit(decodeURIComponent(req.params.id));
+    if ("error" in result) return res.status(result.status).json({ error: result.error });
+    res.json(result);
+  });
+  app.post("/api/mcqs/:id/audit-mark-fixed", (req, res) => {
+    const row = markMcqAuditFixed(decodeURIComponent(req.params.id));
+    if (!row) return res.status(404).json({ error: "No audit verdict for this MCQ" });
+    res.json({ audit: row });
+  });
+  app.post("/api/mcqs/:id/audit-dismiss", (req, res) => {
+    const row = dismissMcqAudit(decodeURIComponent(req.params.id));
+    if (!row) return res.status(404).json({ error: "No audit verdict for this MCQ" });
+    res.json({ audit: row });
+  });
+  app.post("/api/mcqs/:id/audit-reopen", (req, res) => {
+    const row = reopenMcqAudit(decodeURIComponent(req.params.id));
+    if (!row) return res.status(404).json({ error: "No audit verdict for this MCQ" });
+    res.json({ audit: row });
   });
 
   // Detail route uses the topicSlug__code id form. Match anything (including slashes

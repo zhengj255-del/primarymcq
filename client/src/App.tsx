@@ -10,14 +10,16 @@ import NotFound from "@/pages/not-found";
 import StudyPage from "@/pages/Study";
 import MCQsPage from "@/pages/MCQs";
 import DisputesPage from "@/pages/Disputes";
+import QualityPage from "@/pages/Quality";
 import SettingsPage from "@/pages/Settings";
-import { Brain, FileQuestion, Scale, Settings as SettingsIcon, RefreshCw, Check, AlertCircle } from "lucide-react";
+import { Brain, FileQuestion, Scale, ShieldCheck, Settings as SettingsIcon, RefreshCw, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const NAV: Array<{ href: string; label: string; icon: any; testId: string }> = [
   { href: "/", label: "Study", icon: Brain, testId: "link-study" },
   { href: "/mcqs", label: "MCQs", icon: FileQuestion, testId: "link-mcqs" },
   { href: "/disputes", label: "Disputes", icon: Scale, testId: "link-disputes" },
+  { href: "/quality", label: "Quality", icon: ShieldCheck, testId: "link-quality" },
   { href: "/settings", label: "Settings", icon: SettingsIcon, testId: "link-settings" },
 ];
 
@@ -157,7 +159,7 @@ export function Sidebar() {
           <div className="ledger-brand-meta">ANZCA PRIMARY</div>
         </div>
       </Link>
-      {/* Four routes, one flat row — no menus to open. overflow-x-auto lets a
+      {/* Five routes, one flat row — no menus to open. overflow-x-auto lets a
           phone scroll the row rather than wrap the sticky bar. */}
       <nav className="ledger-nav overflow-x-auto" aria-label="Primary navigation">
         {NAV.map((n) => {
@@ -270,6 +272,7 @@ export function AppRouter() {
       <Route path="/study" component={StudyPage} />
       <Route path="/mcqs" component={MCQsPage} />
       <Route path="/disputes" component={DisputesPage} />
+      <Route path="/quality" component={QualityPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>

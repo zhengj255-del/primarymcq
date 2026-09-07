@@ -70,8 +70,9 @@ describe("dispute triage queue — both dispute paths", () => {
     // The header (getMcqStats) has always used the effective flag; the queue
     // used the base column, so the two disagreed by the number of user flags.
     expect(listDisputeTriage().counts.pending).toBe(getMcqStats().disputed);
-    // And the payload carries nothing but the counts and the rows — there is
-    // no machine verdict lane on this site.
+    // The function itself carries nothing but the counts and the rows; the AI
+    // adjudications the Disputes page badges rows with are joined on by the
+    // route (server/routes.ts), from server/mcqAudit.ts.
     expect(Object.keys(listDisputeTriage()).sort()).toEqual(["counts", "items"]);
   });
 

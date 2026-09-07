@@ -13,6 +13,7 @@
 import Database from "better-sqlite3";
 import type { Settings, SettingsPatch } from "@shared/schema";
 import { bootstrapMcqs, reconcileAttemptCorrectness } from "./mcqs";
+import { ensureAuditTable } from "./mcqAudit";
 
 // The Melbourne calendar helpers (todayISO, localMidnightMs, the two-pass DST
 // offset resolution) live in ./dates, a leaf module that imports nothing from
@@ -170,6 +171,11 @@ bootstrap();
 // resolves lazily: mcqs.ts imports sqlite but only uses it inside functions,
 // so by the time bootstrapMcqs() is called, sqlite is fully initialised.
 bootstrapMcqs();
+// The AI sweep's verdict table (server/mcqAudit.ts). Created here, at boot,
+// rather than lazily on the first sweep, so /api/export and the rolling backup
+// always see the complete schema — a table that only exists once a feature has
+// been used is a table a restore can silently skip.
+ensureAuditTable();
 // Attempt correctness is stored denormalised but DERIVED from the key, and a
 // triage fix or a hand edit changes keys. Re-derive any row left disagreeing
 // with its current key by a key change that predates regradeAttempts().

@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Standalone MCQ study site — the Black Bank corpus with Test / Tutor / spaced-repetition modes. No AI, no Anki, its own database.",
+  "description": "Standalone MCQ study site — the Black Bank corpus with Test / Tutor / spaced-repetition modes, and an optional AI quality sweep to polish the bank. No Anki, its own database.",
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "tsx script/build.ts",

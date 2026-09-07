@@ -319,11 +319,13 @@ describe("route order: literal /api/mcqs/... paths answer before the :id wildcar
     expect(s.byTopic.find((t: any) => t.slug === TOPIC)).toMatchObject({ poolSize: topicAnswered, attempted: 2, correctLatest: 1 });
   });
 
-  it("GET /api/mcqs/triage is the queue, with counts and rows only", async () => {
+  it("GET /api/mcqs/triage is the queue: counts, rows and the AI adjudications map", async () => {
     const res = await api("/api/mcqs/triage");
     expect(res.status).toBe(200);
     const t = await res.json();
-    expect(Object.keys(t).sort()).toEqual(["counts", "items"]);
+    expect(Object.keys(t).sort()).toEqual(["adjudications", "counts", "items"]);
+    // No sweep has run: the map is present and empty, never absent.
+    expect(t.adjudications).toEqual({});
     expect(Object.keys(t.counts).sort()).toEqual(["accepted", "discarded", "fixed", "pending", "total"]);
     expect(t.items.length).toBe(t.counts.total);
     expect(t.counts.pending).toBeGreaterThan(0);
@@ -619,6 +621,12 @@ describe("backup: GET /api/export → POST /api/import?confirm=YES", () => {
     await post("/api/mcqs/srs/rate", { mcqId: id, rating: 3 }); // attempts + srs_state + srs_undo
     await post("/api/mcqs/srs/extra-new", { count: 2 });          // srs_extra_new
     await post("/api/mcqs/session", { mode: "tutor", topics: [TOPIC], count: 2 }); // study_sessions
+    // mcq_audit: one stored AI verdict, exactly as a finished sweep leaves it.
+    sqlite.prepare(`INSERT OR REPLACE INTO mcq_audit
+      (mcq_id, content_hash, verdict, confidence, suggested_answer, corrected_reason,
+       dispute_note, suggested_stem, suggested_options, model, assessed_at, status)
+      VALUES (?, 'planted', 'confirm_key', 'high', ?, 'Kept across the round-trip too.', '', NULL, NULL, 'stub-model', 1, 'suggested')`)
+      .run(editedId, answerOf(editedId));
   });
 
   it("the export names every table in the contract, as raw snake_case rows, as a download", async () => {
@@ -632,7 +640,7 @@ describe("backup: GET /api/export → POST /api/import?confirm=YES", () => {
     expect(typeof dump.exportedAt).toBe("string");
     expect(Object.keys(dump.tables).sort()).toEqual([...EXPORT_TABLES].sort());
     expect([...EXPORT_TABLES].sort()).toEqual([
-      "mcq_attempts", "mcq_overrides", "mcq_srs_extra_new", "mcq_srs_state", "mcq_srs_undo", "mcq_study_sessions", "settings",
+      "mcq_attempts", "mcq_audit", "mcq_overrides", "mcq_srs_extra_new", "mcq_srs_state", "mcq_srs_undo", "mcq_study_sessions", "settings",
     ]);
     for (const t of EXPORT_TABLES) {
       expect(Array.isArray(dump.tables[t]), t).toBe(true);
@@ -641,6 +649,7 @@ describe("backup: GET /api/export → POST /api/import?confirm=YES", () => {
     }
     expect(dump.tables.settings).toEqual([{ id: 1, srs_retention: 0.9, srs_fuzz: 1, srs_new_per_day: 33, srs_max_reviews_per_day: 200 }]);
     expect(dump.tables.mcq_overrides[0]).toMatchObject({ mcq_id: editedId, reason: "Kept across the round-trip." });
+    expect(dump.tables.mcq_audit[0]).toMatchObject({ mcq_id: editedId, verdict: "confirm_key", corrected_reason: "Kept across the round-trip too." });
     expect(dump.tables.mcq_attempts[0]).toHaveProperty("mcq_id");
     expect(dump.tables.mcq_attempts[0]).toHaveProperty("attempted_at");
     expect(dump.tables.mcq_srs_state[0]).toHaveProperty("due_at");

@@ -6,6 +6,7 @@
 #   fly apps create <app-name>
 #   fly volumes create mcq_data --region syd --size 1 --app <app-name>
 #   fly secrets set APP_PASSWORD='...' --app <app-name>
+#   fly secrets set OPENAI_API_KEY='sk-...' --app <app-name>   # optional: the AI quality sweep
 # `app` below is the name you chose when you created the Fly app.
 
 app = 'primarymcq'

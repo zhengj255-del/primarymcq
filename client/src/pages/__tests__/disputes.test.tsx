@@ -115,16 +115,27 @@ describe("disputes page — the queue and its promise", () => {
     expect(screen.queryByTestId("reason-gi__Q2")).toBeNull();
   });
 
-  it("has no bulk lane and no second opinion — the only verdicts here are yours", async () => {
+  it("without an AI key the bulk lane is offered but disabled, and nothing polls or sweeps on its own", async () => {
+    // The stub answers /api/mcqs/audit/status with {} — no key, nothing
+    // running — which is what a server without OPENAI_API_KEY looks like to
+    // this page.
     const s = stub();
     mount();
     await screen.findByTestId("triage-row-gi__Q1");
+    // Two pending disputes, no verdicts: the adjudicate button is there,
+    // disabled, and says why. Nothing is resolvable, so no Resolve button.
+    const adj = await screen.findByTestId("button-adjudicate");
+    expect(adj.textContent).toContain("Adjudicate 2 undecided");
+    expect((adj as HTMLButtonElement).disabled).toBe(true);
+    expect(adj.getAttribute("title")).toContain("OPENAI_API_KEY");
+    expect(screen.queryByTestId("button-resolve-all")).toBeNull();
+    expect(screen.queryByTestId("triage-adjudicating")).toBeNull();
     // Everything on the page is one of these: the header, the counts and
-    // filters, and a row's own controls. Any extra lane — a page-level
-    // button, a badge saying what something else decided for a row — adds a
+    // filters, the bulk lane, and a row's own controls. Any extra lane adds a
     // testid that is not in this list.
     const allowed = [
-      /^text-page-title$/, /^text-triage-progress$/, /^filter-status-/, /^select-triage-topic$/,
+      /^text-page-title$/, /^link-to-quality$/, /^text-triage-progress$/, /^filter-status-/, /^select-triage-topic$/,
+      /^button-adjudicate$/, /^button-resolve-all/, /^triage-bulk-none$/, /^triage-adjudicating$/, /^adjudication-/,
       /^triage-row-/, /^button-expand-/, /^status-/, /^reason-/,
       /^button-accept-/, /^button-fix-/, /^button-discard-/, /^button-reopen-/,
       /^text-triage-empty$/,
@@ -132,11 +143,12 @@ describe("disputes page — the queue and its promise", () => {
     const ids = Array.from(document.querySelectorAll("[data-testid]")).map((el) => el.getAttribute("data-testid") ?? "");
     expect(ids).toContain("button-accept-gi__Q1");
     expect(ids.filter((id) => !allowed.some((re) => re.test(id)))).toEqual([]);
-    // And until a verdict is given the page talks to exactly one endpoint —
-    // the queue itself. Nothing polls, nothing sweeps.
+    // Until a verdict is given the page reads exactly two things: the queue,
+    // and the sweep status — ONCE, since nothing is running and so nothing
+    // polls. It never POSTs by itself.
     const urls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]).replace(/\?.*$/, ""));
-    expect(urls.length).toBeGreaterThan(0);
-    expect(urls.filter((u) => !u.endsWith("/api/mcqs/triage"))).toEqual([]);
+    expect(new Set(urls)).toEqual(new Set(["/api/mcqs/triage", "/api/mcqs/audit/status"]));
+    expect(urls.filter((u) => u.endsWith("/api/mcqs/audit/status"))).toHaveLength(1);
     expect(s.posts.length).toBe(0);
   });
 });

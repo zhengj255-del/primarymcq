@@ -3,31 +3,39 @@ import fs from "node:fs";
 import path from "node:path";
 
 // ---------------------------------------------------------------------------
-// "NO AI" and "shares NOTHING", enforced by reading the tree.
+// "SHARES NOTHING WITH THE TRACKER", enforced by reading the tree.
 //
 // mcq-site is a complete, separate application: its own database, its own
-// password, its own build. Two things follow, and both are cheap to lose in a
-// port that copies files from the tracker one at a time:
+// password, its own build. It was cut out of a larger study tracker, and two
+// things are cheap to lose in a port that copies files from that tracker one
+// at a time:
 //
-//   1. Nothing under it may mention the machinery it was cut away from — the
-//      model client and its key, the generated-question layer, the adjudication
-//      sweep, the per-machine credential, the mock bridge, the viva corpus.
-//      A stray identifier in a comment is how a "removed" feature gets pasted
-//      back in by the next person grepping for it.
+//   1. Nothing under it may mention the tracker-only machinery it was cut
+//      away from — the generated-question layer, the textbook embedding
+//      store, the per-machine credential, the mock bridge, the viva corpus,
+//      the tracker's own name. A stray identifier in a comment is how a
+//      "removed" feature gets pasted back in by the next person grepping for
+//      it.
 //   2. Nothing under it may import from outside it. A relative path that
-//      climbs out of mcq-site/ is a runtime dependency on the tracker's tree,
-//      and the Dockerfile builds mcq-site/ alone.
+//      climbs out of the repository is a runtime dependency on the tracker's
+//      tree, and the Dockerfile builds this repository alone.
+//
+// The ONE piece of the tracker's AI deliberately carried across is the MCQ
+// adjudicator and the quality sweep built on it (server/ai/, server/mcqAudit.ts)
+// — a dependency-free client over global fetch, one env key, off until that
+// key is set. Its identifiers are therefore allowed; the textbook grounding
+// index it had in the tracker is not (see the list below).
 //
 // The pattern list is case-insensitive on purpose: the tokens are identifiers
 // and env names, and a casing variant is the same leak.
 // ---------------------------------------------------------------------------
 
 const MCQ_SITE = path.resolve(import.meta.dirname, "../..");
-const THIS_FILE = path.resolve(import.meta.dirname, "noAi.test.ts");
+const THIS_FILE = path.resolve(import.meta.dirname, "standalone.test.ts");
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".vite"]);
 
 const FORBIDDEN =
-  /openai|OPENAI_API_KEY|hasApiKey|\bllm\b|gpt|triage-suggest|adjudicat|mcq_variants|mcqVariants|variantId|mcqAudit|mcq_audit|textbook|device_token|deviceToken|ankiaddon|\/api\/anki|syncAutoMock|mock_attempts|vivaCorpus|renton/i;
+  /mcq_variants|mcqVariants|variantId|textbookStore|textbookCoverage|textbook_store|groundingBlock|RAG_TOP_K|EMBED_MODEL|device_token|deviceToken|ankiaddon|\/api\/anki|syncAutoMock|mock_attempts|vivaCorpus|renton/i;
 
 // The question bank is data, not code: its prose is whatever the Black Bank
 // says, so it is not scanned for identifiers (it is still walked by the
@@ -56,7 +64,7 @@ function walk(dir: string, out: string[] = []): string[] {
 
 const rel = (f: string) => path.relative(MCQ_SITE, f);
 
-describe("no AI, no tracker-only machinery, anywhere under mcq-site", () => {
+describe("no tracker-only machinery, anywhere under mcq-site", () => {
   it("server/, shared/, client/src and the root config files carry none of the removed identifiers", () => {
     const roots = ["server", "shared", "client/src"].map((d) => path.join(MCQ_SITE, d));
     for (const r of roots) expect(fs.existsSync(r), `${rel(r)} exists`).toBe(true);
@@ -77,13 +85,35 @@ describe("no AI, no tracker-only machinery, anywhere under mcq-site", () => {
     expect(hits).toEqual([]);
   });
 
-  it("package.json lists no model client, no ORM and no websocket library", () => {
+  it("package.json lists no model SDK, no ORM and no websocket library", () => {
+    // The AI client is server/ai/llm.ts over global fetch — a model SDK in
+    // package.json would mean someone bypassed it.
     const pkg = JSON.parse(fs.readFileSync(path.join(MCQ_SITE, "package.json"), "utf8"));
     const names = Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}), ...(pkg.optionalDependencies ?? {}) });
     expect(names.length).toBeGreaterThan(10);
     expect(names.filter((n) => /openai|anthropic|drizzle|ws$/.test(n))).toEqual([]);
     // And the site is its own package, not the tracker's.
     expect(pkg.name).toBe("mcq-site");
+  });
+
+  it("the AI is one key, one client, one caller — and off without the key", () => {
+    // The only file that talks to the model API is the client; the only place
+    // the key is read is its config. Everything else reaches the model
+    // through triageMcq(), which the sweep and the suggest route share.
+    const src = (p: string) => fs.readFileSync(path.join(MCQ_SITE, p), "utf8");
+    const code = ["server", "shared", "client/src"].flatMap((d) => walk(path.join(MCQ_SITE, d)))
+      .filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes("__tests__"));
+    const fetchers = code.filter((f) => /\/v1\/chat\/completions/.test(fs.readFileSync(f, "utf8"))).map(rel);
+    expect(fetchers).toEqual(["server/ai/llm.ts"]);
+    const keyReaders = code.filter((f) => /process\.env\.OPENAI_API_KEY/.test(fs.readFileSync(f, "utf8"))).map(rel);
+    expect(keyReaders).toEqual(["server/ai/config.ts"]);
+    // Every route that can reach the model refuses without the key.
+    const routes = src("server/routes.ts");
+    for (const p of ["/api/mcqs/audit/run", "/api/mcqs/triage/adjudicate", "/api/mcqs/:id/triage-suggest"]) {
+      const at = routes.indexOf(`"${p}"`);
+      expect(at, `${p} is registered`).toBeGreaterThan(0);
+      expect(routes.slice(at, at + 400), `${p} guards on hasApiKey()`).toContain("hasApiKey()");
+    }
   });
 });
 
@@ -135,7 +165,7 @@ describe("mcq-site imports nothing from outside mcq-site", () => {
 
   it("the server entry does not wire in anything this site does not own", () => {
     const idx = fs.readFileSync(path.join(MCQ_SITE, "server/index.ts"), "utf8");
-    for (const gone of ["deckPathMigration", "loAutoEmbed", "server/ai", "./ai/"]) {
+    for (const gone of ["deckPathMigration", "loAutoEmbed", "textbookStore"]) {
       expect(idx, gone).not.toContain(gone);
     }
     // Every local import of index.ts is a file under mcq-site/server.
