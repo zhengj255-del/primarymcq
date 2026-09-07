@@ -153,10 +153,17 @@ describe("GET /api/mcqs/srs/queue-stats describes the queue it will actually ser
   });
 
   it("a due question DISPUTED IN THE BASE CORPUS is excluded with no parameter either", async () => {
+    // The shipped corpus has carried no disputed questions since the
+    // 2026-09-07 whole-bank refresh, so flag one here as the ingest flags one
+    // the corpus ships disputed: 1 in mcqs.disputed, no override row. Outside
+    // the pair's topic, so the other fixtures in this file stay clean.
+    const { topic: pairTopic } = pickPair();
     const row = sqlite.prepare(
-      `SELECT id, topic_slug AS topic FROM mcqs WHERE answer IS NOT NULL AND disputed = 1 LIMIT 1`,
-    ).get() as { id: string; topic: string } | undefined;
-    expect(row, "corpus sanity: an answered, base-disputed MCQ").toBeTruthy();
+      `SELECT id, topic_slug AS topic FROM mcqs
+        WHERE answer IS NOT NULL AND disputed = 0 AND topic_slug <> ? ORDER BY id LIMIT 1`,
+    ).get(pairTopic) as { id: string; topic: string } | undefined;
+    expect(row, "corpus sanity: an answered, clean MCQ outside the pair's topic").toBeTruthy();
+    sqlite.prepare("UPDATE mcqs SET disputed = 1 WHERE id = ?").run(row!.id);
     trackDue(row!.id);
 
     const stats = await queueStats(row!.topic);

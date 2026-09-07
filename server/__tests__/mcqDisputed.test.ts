@@ -11,16 +11,25 @@ import { startSession, getUserStats, getSrsDue } from "../mcqStudy";
 // definition everywhere now: effectively-disputed (override wins over base)
 // and not discarded.
 
-/** A base-disputed question whose topic is small enough that a count-200
- *  session selects the topic's whole pool (making inclusion deterministic). */
-function disputedInSmallTopic(): { id: string; topic: string } | null {
+/** A base-disputed question — flagged HERE, in this file's throwaway database,
+ *  the way the ingest flags one the corpus ships as disputed: 1 in
+ *  mcqs.disputed with no override row. The shipped corpus has carried none
+ *  since the 2026-09-07 whole-bank refresh (every dispute was triaged in the
+ *  tracker before the hand-off), so a test of the base-column half of
+ *  "effectively disputed" seeds its own rather than hope the corpus still
+ *  carries one. Picks an answered, clean question in a topic small enough that
+ *  a count-200 session selects the topic's whole pool (making inclusion
+ *  deterministic). */
+function seedBaseDisputed(): { id: string; topic: string } {
   const row = sqlite.prepare(
     `SELECT m.id, m.topic_slug AS topic FROM mcqs m
-      WHERE m.disputed = 1 AND m.answer IS NOT NULL
+      WHERE m.disputed = 0 AND m.answer IS NOT NULL
         AND (SELECT COUNT(*) FROM mcqs t WHERE t.topic_slug = m.topic_slug AND t.answer IS NOT NULL) <= 200
-      LIMIT 1`,
+      ORDER BY m.id LIMIT 1`,
   ).get() as { id: string; topic: string } | undefined;
-  return row ?? null;
+  expect(row, "corpus sanity: an answered, clean MCQ in a small topic").toBeTruthy();
+  sqlite.prepare("UPDATE mcqs SET disputed = 1 WHERE id = ?").run(row!.id);
+  return row!;
 }
 
 beforeEach(() => {
@@ -29,7 +38,7 @@ beforeEach(() => {
 
 describe("one definition of 'disputed' across stats, list filter, and study pool", () => {
   it("a triage-accepted question leaves the 'Disputed only' list (and the stats count)", () => {
-    const row = sqlite.prepare("SELECT id FROM mcqs WHERE disputed = 1 LIMIT 1").get() as { id: string };
+    const row = seedBaseDisputed();
     const before = listMcqs({ disputed: true, limit: 10_000 });
     expect(before.items.some((m) => m.id === row.id)).toBe(true);
     const statsBefore = getMcqStats().disputed;
@@ -49,9 +58,7 @@ describe("one definition of 'disputed' across stats, list filter, and study pool
   });
 
   it("Study 'exclude disputed' follows the effective dispute, not the frozen base column", () => {
-    const target = disputedInSmallTopic();
-    expect(target).not.toBeNull(); // corpus sanity: a small-topic disputed Q exists
-    const { id, topic } = target!;
+    const { id, topic } = seedBaseDisputed();
     resolveMcqDispute(id, "accept");
     // Resolved dispute → the question is clean again → sittable with the toggle on.
     const sess = startSession({ mode: "tutor", count: 200, topics: [topic], excludeDisputed: true });
@@ -72,7 +79,7 @@ describe("one definition of 'disputed' across stats, list filter, and study pool
 
 describe("MCQ stats respect the override layer (counts match the sittable pool)", () => {
   it("a discarded question leaves total, withAnswer, and its topic count", () => {
-    const row = sqlite.prepare("SELECT id, topic_slug AS topic FROM mcqs WHERE disputed = 1 AND answer IS NOT NULL LIMIT 1").get() as { id: string; topic: string };
+    const row = seedBaseDisputed();
     const before = getMcqStats();
     const topicBefore = before.byTopic.find((t) => t.slug === row.topic)!.count;
 

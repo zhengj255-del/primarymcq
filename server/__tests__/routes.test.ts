@@ -63,6 +63,14 @@ beforeAll(async () => {
   sqlite.prepare("DELETE FROM mcq_srs_extra_new").run();
   sqlite.prepare("DELETE FROM mcq_study_sessions").run();
   sqlite.prepare("DELETE FROM mcq_overrides").run();
+  // The shipped corpus has carried no disputed questions since the 2026-09-07
+  // whole-bank refresh (every dispute was triaged in the tracker before the
+  // hand-off). The stats header and the triage queue are asserted non-empty
+  // below, so flag ONE question here the way the ingest flags one the corpus
+  // ships disputed — outside TOPIC, whose pool must stay clean.
+  sqlite.prepare(
+    "UPDATE mcqs SET disputed = 1 WHERE id = (SELECT id FROM mcqs WHERE topic_slug <> ? AND answer IS NOT NULL ORDER BY id LIMIT 1)",
+  ).run(TOPIC);
 
   const app = express();
   installAuth(app);
@@ -123,7 +131,9 @@ describe("corpus reads", () => {
     const s = await res.json();
     expect(Object.keys(s).sort()).toEqual(["byTopic", "disputed", "papers", "total", "withAnswer"]);
     expect(s.total).toBeGreaterThan(1800);
-    expect(s.withAnswer).toBeLessThan(s.total);
+    // Every shipped question is keyed since the whole-bank refresh, so the two
+    // counts coincide; withAnswer can never exceed total.
+    expect(s.withAnswer).toBeLessThanOrEqual(s.total);
     expect(s.disputed).toBeGreaterThan(0);
     const gi = s.byTopic.find((t: any) => t.slug === TOPIC);
     expect(gi).toMatchObject({ slug: TOPIC, name: expect.any(String), domain: expect.any(String), count: topicTotal });

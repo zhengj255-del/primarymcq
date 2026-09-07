@@ -66,6 +66,18 @@ function pick(where: string): { id: string; topic: string } {
   return row!;
 }
 
+/** A base-disputed question — flagged here, in this file's throwaway database,
+ *  as the ingest flags one the corpus ships disputed: 1 in mcqs.disputed and no
+ *  override row. The shipped corpus has carried none since the 2026-09-07
+ *  whole-bank refresh (every dispute was triaged in the tracker before the
+ *  hand-off), so the base-column half of the predicate is exercised on a row
+ *  this file flags itself. */
+function pickBaseDisputed(): { id: string; topic: string } {
+  const row = pick("disputed = 0");
+  sqlite.prepare("UPDATE mcqs SET disputed = 1 WHERE id = ?").run(row.id);
+  return row;
+}
+
 beforeEach(() => {
   sqlite.prepare("DELETE FROM mcq_srs_state").run();
   sqlite.prepare("DELETE FROM mcq_overrides").run();
@@ -73,7 +85,7 @@ beforeEach(() => {
 
 describe("SRS due counts and the SRS queue share ONE dispute predicate", () => {
   it("a due question disputed in the base corpus is counted 0 and served 0", () => {
-    const { id, topic } = pick("disputed = 1");
+    const { id, topic } = pickBaseDisputed();
     trackDue(id);
 
     const s = getUserStats().srsDue;
@@ -124,7 +136,7 @@ describe("SRS due counts and the SRS queue share ONE dispute predicate", () => {
     // The override wins in BOTH directions: 0 written over a base 1 makes the
     // question sittable again. A predicate that simply refused base-disputed
     // rows would strand every question triage has cleared.
-    const { id, topic } = pick("disputed = 1");
+    const { id, topic } = pickBaseDisputed();
     trackDue(id);
     updateMcqOverride(id, { disputed: false });
 
