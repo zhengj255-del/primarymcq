@@ -1,5 +1,6 @@
 import "./testDb";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { ensureBaseDisputed } from "./disputedFixture";
 import { sqlite } from "../storage";
 import { SRS_SITTABLE_SQL } from "../mcqSittable";
 import { getUserStats, getSrsDue, getSrsQueueStats, startSession } from "../mcqStudy";
@@ -65,6 +66,10 @@ function pick(where: string): { id: string; topic: string } {
   expect(row, `corpus sanity: an answered MCQ with ${where}`).toBeTruthy();
   return row!;
 }
+
+// See disputedFixture.ts: the shipped corpus may carry no base-disputed
+// question, and pick("disputed = 1") below needs one.
+beforeAll(() => { ensureBaseDisputed(); });
 
 beforeEach(() => {
   sqlite.prepare("DELETE FROM mcq_srs_state").run();

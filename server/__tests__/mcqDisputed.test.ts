@@ -1,6 +1,7 @@
 import "./testDb";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { sqlite } from "../storage";
+import { ensureBaseDisputed } from "./disputedFixture";
 import { listMcqs, getMcqStats, resolveMcqDispute, updateMcqOverride, revertMcqOverride } from "../mcqs";
 import { startSession, getUserStats, getSrsDue } from "../mcqStudy";
 
@@ -22,6 +23,10 @@ function disputedInSmallTopic(): { id: string; topic: string } | null {
   ).get() as { id: string; topic: string } | undefined;
   return row ?? null;
 }
+
+// The corpus is the tracker's curated copy and may ship with NO base-disputed
+// question at all; these tests are about the predicate, so seed the precondition.
+beforeAll(() => { ensureBaseDisputed(); });
 
 beforeEach(() => {
   sqlite.prepare("DELETE FROM mcq_overrides").run();

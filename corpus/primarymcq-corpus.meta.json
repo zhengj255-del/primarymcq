@@ -1,0 +1,40 @@
+{
+  "from": "renton-tracker mcq_overrides (every row), folded into the corpus by corpus/bake-overrides.mjs --scope all",
+  "model": "gpt-5.6-sol",
+  "date": "2026-09-07",
+  "exportedAt": "2026-09-07T14:20:23.250Z",
+  "scope": "all",
+  "records": 2366,
+  "overridesFolded": 981,
+  "byShape": {
+    "recall": {
+      "n": 659,
+      "withOverride": 445,
+      "answerSupplied": 146,
+      "answerChanged": 0,
+      "answerCleared": 0,
+      "stemRepaired": 56,
+      "optionsRepaired": 37,
+      "reasonRewritten": 146,
+      "disputeCleared": 0,
+      "discarded": 0,
+      "viaAudit": 141,
+      "byHand": 5
+    },
+    "black-bank": {
+      "n": 1707,
+      "withOverride": 536,
+      "answerSupplied": 3,
+      "answerChanged": 117,
+      "answerCleared": 0,
+      "stemRepaired": 289,
+      "optionsRepaired": 295,
+      "reasonRewritten": 452,
+      "disputeCleared": 247,
+      "discarded": 0,
+      "viaAudit": 84,
+      "byHand": 371
+    }
+  },
+  "note": "Each changed question carries one provenance line at the top of its reason. Nothing here is examiner-verified."
+}
