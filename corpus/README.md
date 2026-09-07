@@ -6,6 +6,7 @@ Recalled ANZCA Primary MCQ papers, converted into the exact record shape of `ser
 |---|---|
 | `additions-2025-2026-recalls.json` | The records. An object with `schema`, `generated`, `sources` (one line per sitting: code prefix, section label, where it came from, how many records) and `records`, the array of questions. |
 | `merge-additions.mjs` | Merges a records file into a `mcqs.json`, idempotently by `id`. No dependencies beyond Node. |
+| `handover-2026-09-07.md` | Hand-over notes written after the 2026-09-07 answer refresh: what the bank holds now, what the tracker's audit changed and where, the conventions that must not be broken (permanent ids, the provenance line at the top of each touched `reason`) and which questions deserve human review first. Read it before editing the corpus. |
 
 ## Sittings in the file
 
