@@ -1,0 +1,67 @@
+# Deploy — test on every push and pull request; deploy to Fly on main.
+#
+# This repository is the whole site: the deploy job needs the Fly app named in
+# fly.toml to exist (one-time: `fly apps create <name>`, see README.md) and a
+# repository secret FLY_API_TOKEN that is allowed to deploy that app. The volume
+# is created on the first deploy if it is missing. The app password is optional
+# (see the step below).
+
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Type-check + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+  deploy:
+    name: Deploy to Fly.io
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # The login gate is OPTIONAL and, by the owner's choice, off by default:
+      # the site is meant to be shared with a study partner by URL alone. With
+      # no APP_PASSWORD the server boots unlocked and anyone with the address
+      # can study, edit questions and reset progress. To lock it later, either
+      # run `fly secrets set APP_PASSWORD='...' --app <app>` or add a repository
+      # secret named MCQ_APP_PASSWORD — this step then sets it on the app.
+      - name: App password (optional)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          MCQ_APP_PASSWORD: ${{ secrets.MCQ_APP_PASSWORD }}
+        run: |
+          APP=$(sed -n "s/^app = '\(.*\)'/\1/p" fly.toml)
+          echo "Fly app from fly.toml: $APP"
+          if flyctl secrets list --app "$APP" | awk 'NR>1 {print $1}' | grep -qx APP_PASSWORD; then
+            echo "APP_PASSWORD is already set on $APP"
+          elif [ -n "$MCQ_APP_PASSWORD" ]; then
+            flyctl secrets set APP_PASSWORD="$MCQ_APP_PASSWORD" --app "$APP" --stage
+            echo "APP_PASSWORD set on $APP from the MCQ_APP_PASSWORD repository secret (applied by the deploy below)"
+          else
+            echo "::warning::$APP has no APP_PASSWORD, so the site deploys with the login gate OPEN (anyone with the URL can use it). To lock it later: fly secrets set APP_PASSWORD='...' --app $APP, or add a repository secret named MCQ_APP_PASSWORD and re-run."
+          fi
+      - name: Deploy (remote build)
+        run: flyctl deploy --remote-only --wait-timeout 600
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
