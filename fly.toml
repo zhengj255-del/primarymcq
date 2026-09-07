@@ -1,0 +1,59 @@
+# fly.toml for the standalone MCQ study site.
+#
+# This is a SEPARATE Fly app from the main tracker: its own name, its own
+# volume, its own secrets. Nothing here touches the tracker's app or data.
+# Before the first deploy (see README.md):
+#   fly apps create <app-name>
+#   fly volumes create mcq_data --region syd --size 1 --app <app-name>
+#   fly secrets set APP_PASSWORD='...' --app <app-name>
+# `app` below is the name you chose when you created the Fly app.
+
+app = 'primarymcq'
+primary_region = 'syd'
+
+# server/shutdown.ts closes SQLite on SIGTERM (checkpointing the WAL). These
+# two keys are TOP-LEVEL and must stay above the first [...] header — placed
+# after a table header they belong to that table and flyctl silently drops them.
+kill_signal = 'SIGTERM'
+kill_timeout = '30s'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  DB_PATH = '/data/data.db'
+  NODE_ENV = 'production'
+  PORT = '8080'
+
+[[mounts]]
+  source = 'mcq_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Kept running. Sessions live in memory (server/auth.ts), so a machine that
+  # stops when idle signs the user out after every quiet spell — the 30-day
+  # cookie survives, the session behind it does not. 'stop' / 0 is cheaper if
+  # re-typing the password after each break is acceptable.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 200
+    soft_limit = 100
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/api/healthz'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
