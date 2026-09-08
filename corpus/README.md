@@ -21,7 +21,7 @@ Where a question recurs from an earlier sitting it is kept as a separate record 
 
 ## Where the answers came from
 
-The recallers wrote down the questions, not the answers: 255 of the 513 arrived with no key at all. Those were answered by the **renton-tracker MCQ audit** — a per-question adjudication against the prescribed texts — and folded back into this file. Every record it touched carries one line at the top of its `reason` saying so, for example:
+The recallers wrote down the questions, not the answers: 255 of the 513 arrived with no key at all. Those were answered by the **renton-tracker MCQ audit** — a per-question adjudication against the prescribed texts (the sixteen sources listed under [The grounding corpus](#the-grounding-corpus) below) — and folded back into this file. Every record it touched carries one line at the top of its `reason` saying so, for example:
 
 > Answer and explanation supplied by the tracker's GPT audit (gpt-5.6-sol, prescribed-text grounded), 2026-09-07 — not examiner-verified.
 
@@ -46,3 +46,37 @@ The script appends records whose `id` is new and replaces records whose `id` alr
 ## Regenerating
 
 The records were produced from the three source files by scripts kept outside the repository (the sources contain recalled exam material and are not committed). To add a further sitting, produce records in the same shape — the `schema` line in the JSON and `merge-additions.mjs` spell out what a record must contain — give the sitting its own code prefix, and merge.
+
+## The grounding corpus
+
+Every answer, explanation and repair in this file that is credited to the tracker's audit was reached "against the prescribed texts". That phrase means one specific thing: the **prescribed-textbook retrieval store** the tracker (`zhengj255-del/renton-tracker`) keeps on its Fly volume. It is built by `scripts/chunk_textbooks.mjs` and `scripts/embed_textbooks.mjs` in that repository from the owner's PDFs, and it is not committed anywhere — the store is derived data, re-creatable from the books, and the books themselves are not ours to publish.
+
+The store covers these sixteen sources, under the labels the audit cites them by (the label is what appears after `Source:` in an explanation):
+
+| # | Label as cited | Source |
+|---|---|---|
+| 1 | ANZCA Curriculum Appendix 2 | Anaesthesia training program curriculum v1.13, Appendix 2 |
+| 2 | Anatomy for Anaesthetists | Anatomy for Anaesthetists (Blackwell, 2014) |
+| 3 | Anesthetic Pharmacology (Evers) | Anesthetic Pharmacology: Basic Principles and Clinical Practice, 2nd ed. |
+| 4 | Essentials of Anaesthetic Equipment | Essentials of Anaesthetic Equipment |
+| 5 | Nunn & Lumb's Respiratory Physiology | Nunn and Lumb's Applied Respiratory Physiology |
+| 6 | Rang & Dale's Pharmacology | Rang and Dale's Pharmacology |
+| 7 | Stoelting's Pharmacology & Physiology | Stoelting's Pharmacology and Physiology in Anesthetic Practice |
+| 8 | Vander's Renal Physiology | Vander's Renal Physiology |
+| 9 | Pappano Cardiovascular Physiology | Pappano & Wier, Cardiovascular Physiology |
+| 10 | West's Respiratory Physiology | West's Respiratory Physiology: The Essentials |
+| 11 | Guyton & Hall Physiology | Guyton and Hall Textbook of Medical Physiology |
+| 12 | Dorsch & Dorsch Equipment | Dorsch & Dorsch, Understanding Anesthesia Equipment |
+| 13 | Clinical Pain Management (Acute Pain) | Clinical Pain Management: Acute Pain |
+| 14 | Principles of Physiology for the Anaesthetist (Kam & Power) | Kam & Power, Principles of Physiology for the Anaesthetist |
+| 15 | Cousins & Bridenbaugh Neural Blockade | Cousins & Bridenbaugh's Neural Blockade in Clinical Anesthesia and Pain Medicine |
+| 16 | Foundations of Anesthesia (Hemmings & Hopkins) | Hemmings & Hopkins, Foundations of Anesthesia |
+
+How the store is made and read:
+
+* Each PDF is extracted page by page and packed into chunks of roughly 800 tokens with about 15% overlap, tagged `{book, page}`. The page is the **physical PDF page index**, 1-based — not the printed page number — so a cited `p. 614` is the 614th page of the file.
+* Chunks are embedded with OpenAI `text-embedding-3-large` at 1536 dimensions; the store holds about 15.5k chunks.
+* At adjudication time the question's stem and options are embedded once and the ten most similar passages (cosine similarity) are handed to the model, which may cite only passages it was shown. A citation naming a book or page outside the retrieved set is stripped before the explanation is saved, so a `Source:` line can never be invented. Where no passage supported the point, the line reads `Source: not in the prescribed-text store`.
+* Nothing outside these sixteen sources is consulted. Recalled exam material, Anki decks and the model's own training are not grounding: a claim that rests on them carries no citation.
+
+Two caveats. The list is what the bake script targets; a book only reaches the store if its PDF filename matched at bake time, and the script's own history records books silently missing for that reason. And the labels are what the audit writes — check the store's `textbook_embeddings.meta.json` on the volume to confirm which of the sixteen are actually loaded on a given day.
