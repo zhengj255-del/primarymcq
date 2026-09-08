@@ -1131,13 +1131,13 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
+    "displayCode": "CD03 alt",
     "papers": [],
     "topicFile": "MCQ-Cardiovascular-Pharmacology.txt",
     "topicName": "Cardiovascular Pharmacology",
     "section": "VASOPRESSORS & INOTROPES",
-    "parentCode": null,
-    "stem": "CD03.(Alternative versions) Ephedrine:",
+    "parentCode": "CD03",
+    "stem": "Ephedrine:",
     "options": {
       "A": "Has direct alpha actions only",
       "B": "Has direct beta actions only",
@@ -2025,7 +2025,7 @@
     "topicName": "Cardiovascular Pharmacology",
     "section": "ANTIHYPERTENSIVES",
     "parentCode": null,
-    "stem": "(Q24]] on Jul01 paper) Guanethidine:",
+    "stem": "Guanethidine:",
     "options": {
       "A": "Acts primarily at?/on? the CNS",
       "B": "Produces anti-hypertensive effect primarily by presynaptically inhibiting release of noradrenaline",
@@ -3121,8 +3121,14 @@
   },
   {
     "code": "OA02",
-    "displayCode": "OA02",
-    "papers": [],
+    "displayCode": "MD07",
+    "papers": [
+      "Mar97",
+      "Jul97",
+      "Jul98",
+      "Mar99",
+      "Feb00"
+    ],
     "topicFile": "MCQ-Cardiovascular-Pharmacology.txt",
     "topicName": "Cardiovascular Pharmacology",
     "section": "DIURETICS",
@@ -3608,7 +3614,7 @@
   },
   {
     "code": "CD10",
-    "displayCode": "CD10",
+    "displayCode": "CD10 v2",
     "papers": [
       "July 2000"
     ],
@@ -4625,12 +4631,14 @@
   {
     "code": "17A-11",
     "displayCode": "17A-11",
-    "papers": [],
+    "papers": [
+      "17B"
+    ],
     "topicFile": "MCQ-Cardiovascular.txt",
     "topicName": "Cardiovascular",
     "section": "ELECTROPHYSIOLOGY",
     "parentCode": null,
-    "stem": "17B-1 What is the PR interval",
+    "stem": "What is the PR interval",
     "options": {
       "A": "Start of the P wave to start of R wave",
       "B": "End of P wave to end of R wave",
@@ -5294,13 +5302,14 @@
     "code": "CV53",
     "displayCode": "CV53",
     "papers": [
-      "Apr01"
+      "Apr01",
+      "Feb12"
     ],
     "topicFile": "MCQ-Cardiovascular.txt",
     "topicName": "Cardiovascular",
     "section": "CONTROL OF CARDIAC OUTPUT & PRESSURE",
     "parentCode": null,
-    "stem": "Feb12 Baroreceptors located in all EXCEPT:",
+    "stem": "Baroreceptors located in all EXCEPT:",
     "options": {
       "A": "Carotid sinus",
       "B": "Carotid body",
@@ -6160,7 +6169,8 @@
     "code": "CV75",
     "displayCode": "CV75",
     "papers": [
-      "Feb06"
+      "Feb06",
+      "Feb12"
     ],
     "topicFile": "MCQ-Cardiovascular.txt",
     "topicName": "Cardiovascular",
@@ -6780,7 +6790,8 @@
       "Jul98",
       "Jul99",
       "Jul01",
-      "Jul03"
+      "Jul03",
+      "Feb12"
     ],
     "topicFile": "MCQ-Cardiovascular.txt",
     "topicName": "Cardiovascular",
@@ -7036,7 +7047,7 @@
     "topicName": "Cardiovascular",
     "section": "APPLIED CARDIOVASCULAR PHYSIOLOGY",
     "parentCode": null,
-    "stem": "Alt version: All increase pulse pressure except",
+    "stem": "All increase pulse pressure except",
     "options": {
       "A": "Increased TPR",
       "B": "Increased Stroke Volume",
@@ -7900,13 +7911,19 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
-    "papers": [],
+    "displayCode": "CV v1",
+    "papers": [
+      "Jul99",
+      "Apr01",
+      "Jul02",
+      "Feb04",
+      "Jul04"
+    ],
     "topicFile": "MCQ-Cardiovascular.txt",
     "topicName": "Cardiovascular",
     "section": "MEASUREMENT",
     "parentCode": null,
-    "stem": "CV [Jul99] [Apr01] [Jul02] [Feb04] [Jul04] Version 1: Normal jugular venous pressure c waves occur:",
+    "stem": "Normal jugular venous pressure c waves occur:",
     "options": {
       "A": "Just prior to atrial systole",
       "B": "Just after atrial systole",
@@ -7922,8 +7939,14 @@
   },
   {
     "code": "OA01-Alt-1",
-    "displayCode": "Version 2",
-    "papers": [],
+    "displayCode": "CV v2",
+    "papers": [
+      "Jul99",
+      "Apr01",
+      "Jul02",
+      "Feb04",
+      "Jul04"
+    ],
     "topicFile": "MCQ-Cardiovascular.txt",
     "topicName": "Cardiovascular",
     "section": "MEASUREMENT",
@@ -10106,13 +10129,13 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
+    "displayCode": "ED06 alt",
     "papers": [],
     "topicFile": "MCQ-Cellular-Metabolic-Endocrine.txt",
     "topicName": "Cellular / Metabolic / Endocrine",
     "section": "ENDOCRINE SYSTEMS",
-    "parentCode": null,
-    "stem": "Ed06 [Alt version] Which decreases renin release:",
+    "parentCode": "ED06",
+    "stem": "Which decreases renin release:",
     "options": {
       "A": "All of the above",
       "B": "Angiotensin II",
@@ -10934,7 +10957,7 @@
     "topicName": "Clinical Measurement",
     "section": "PRINCIPLES OF PHYSICS",
     "parentCode": null,
-    "stem": "version: The specific heat capacity is greatest in:",
+    "stem": "The specific heat capacity is greatest in:",
     "options": {
       "A": "Packed red blood cells",
       "B": "Whole blood",
@@ -11142,7 +11165,7 @@
     "topicName": "Clinical Measurement",
     "section": "PRINCIPLES OF PHYSICS",
     "parentCode": null,
-    "stem": "The likelihood of gas flow being less turbulent: (repeat)",
+    "stem": "The likelihood of gas flow being less turbulent:",
     "options": {
       "A": "Increased radius",
       "B": "Reynolds number > 2000",
@@ -11883,13 +11906,13 @@
   },
   {
     "code": "CM05",
-    "displayCode": "CM05",
+    "displayCode": "CM05 v2",
     "papers": [],
     "topicFile": "MCQ-Clinical-Measurement.txt",
     "topicName": "Clinical Measurement",
     "section": "PULSE OXIMETRY & OXYGEN MEASUREMENT",
     "parentCode": null,
-    "stem": "alt [i] Normal two-wavelength pulse oximetry will underestimate oxygen saturation in the presence of:",
+    "stem": "Normal two-wavelength pulse oximetry will underestimate oxygen saturation in the presence of:",
     "options": {
       "A": "Methaemoglobinaemia",
       "B": "Carboxyhaemoglobinaemia",
@@ -12720,13 +12743,13 @@
   },
   {
     "code": "14B-148",
-    "displayCode": "14B-148",
+    "displayCode": "14B-148 (CM42)",
     "papers": [],
     "topicFile": "MCQ-Equipment-Safety.txt",
     "topicName": "Equipment & Safety",
     "section": "BREATHING CIRCUITS",
     "parentCode": null,
-    "stem": "CM42 There is a unidirectional valve in:",
+    "stem": "There is a unidirectional valve in:",
     "options": {
       "A": "Mapleson A circuit",
       "B": "Mapleson B circuit",
@@ -13009,7 +13032,7 @@
   },
   {
     "code": "15A-149",
-    "displayCode": "15A-149",
+    "displayCode": "15A-149 v2",
     "papers": [],
     "topicFile": "MCQ-Equipment-Safety.txt",
     "topicName": "Equipment & Safety",
@@ -13219,7 +13242,7 @@
     "topicName": "Equipment & Safety",
     "section": "ELECTRICAL SAFETY & DIATHERMY",
     "parentCode": null,
-    "stem": "Airway surgery fire. O2 and N2O being used. N2O is the: (repeat)",
+    "stem": "Airway surgery fire. O2 and N2O being used. N2O is the:",
     "options": {
       "A": "Fuel",
       "B": "Oxidiser",
@@ -13329,7 +13352,7 @@
     "topicName": "Equipment & Safety",
     "section": "ELECTRICAL SAFETY & DIATHERMY",
     "parentCode": null,
-    "stem": "A patient is anaesthetised with 50% oxygen, 50% nitrous oxide and 1% sevoflurane for a tracheostomy. When the surgeon cuts into the trachea with diathermy, the ETT catches fire. The nitrous oxide is acting as (repeat):",
+    "stem": "A patient is anaesthetised with 50% oxygen, 50% nitrous oxide and 1% sevoflurane for a tracheostomy. When the surgeon cuts into the trachea with diathermy, the ETT catches fire. The nitrous oxide is acting as:",
     "options": {
       "A": "Fuel",
       "B": "Oxidising agent",
@@ -13965,7 +13988,7 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
+    "displayCode": "FE (uncoded 1)",
     "papers": [],
     "topicFile": "MCQ-Fluids-Electrolytes.txt",
     "topicName": "Fluids & Electrolytes",
@@ -14389,7 +14412,7 @@
   },
   {
     "code": "OA02",
-    "displayCode": "OA02",
+    "displayCode": "FE (uncoded 2)",
     "papers": [],
     "topicFile": "MCQ-Fluids-Electrolytes.txt",
     "topicName": "Fluids & Electrolytes",
@@ -15544,7 +15567,7 @@
     "topicName": "General Pharmacology",
     "section": "PHARMACOKINETICS – ADME",
     "parentCode": null,
-    "stem": "(A Basic drug with a pKa of 8.7)",
+    "stem": "A basic drug with a pKa of 8.7:",
     "options": {
       "A": "?",
       "B": "?",
@@ -17495,7 +17518,7 @@
   },
   {
     "code": "MD11",
-    "displayCode": "MD11",
+    "displayCode": "MD11 v2",
     "papers": [
       "Jul97",
       "Jul98",
@@ -18628,13 +18651,15 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
-    "papers": [],
+    "displayCode": "BL15 alt",
+    "papers": [
+      "Jul99"
+    ],
     "topicFile": "MCQ-Haematology-Immune-System.txt",
     "topicName": "Haematology / Immune",
     "section": "IMMUNE SYSTEM (INNATE & ACQUIRED)",
-    "parentCode": null,
-    "stem": "BL15 (Jul99 version) Immunoglobulin antigen specificity is determined by:",
+    "parentCode": "BL15",
+    "stem": "Immunoglobulin antigen specificity is determined by:",
     "options": {
       "A": "Variable heavy & light chain",
       "B": "Constant heavy & variable light chain",
@@ -20103,13 +20128,15 @@
   },
   {
     "code": "IN13b",
-    "displayCode": "IN13b",
-    "papers": [],
+    "displayCode": "IN13b v2",
+    "papers": [
+      "Jul01"
+    ],
     "topicFile": "MCQ-Inhalational-Anaesthetics.txt",
     "topicName": "Inhalational Anaesthetics",
     "section": "COMPARATIVE PHARMACOLOGY",
     "parentCode": null,
-    "stem": "Alt version (Jul 01) All the factors decrease MAC except:",
+    "stem": "All the factors decrease MAC except:",
     "options": {
       "A": "Pregnancy",
       "B": "Hyperthermia",
@@ -20151,7 +20178,7 @@
   },
   {
     "code": "IN13b",
-    "displayCode": "IN13b",
+    "displayCode": "IN13b v3",
     "papers": [
       "Jul 01"
     ],
@@ -20159,7 +20186,7 @@
     "topicName": "Inhalational Anaesthetics",
     "section": "COMPARATIVE PHARMACOLOGY",
     "parentCode": null,
-    "stem": "version: With regards to MAC:",
+    "stem": "With regards to MAC:",
     "options": {
       "A": "The MAC of Halothane with 70%N2O is 0.29",
       "B": "Concentration at which 95% of patients don’t move after a surgical stimulus",
@@ -22270,13 +22297,15 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
-    "papers": [],
+    "displayCode": "LA11",
+    "papers": [
+      "Mar98"
+    ],
     "topicFile": "MCQ-Local-Anaesthetics.txt",
     "topicName": "Local Anaesthetics",
     "section": "0.1 = ([B]/[BH+])",
     "parentCode": null,
-    "stem": "LA11[Mar98] Saxitoxin site on sodium channel is:",
+    "stem": "Saxitoxin site on sodium channel is:",
     "options": {
       "A": "Inside channel",
       "B": "Outside channel",
@@ -23529,7 +23558,7 @@
     "topicName": "Maternal / Foetal",
     "section": "PLACENTA",
     "parentCode": null,
-    "stem": "Alt Regarding materno-foetal immunology:",
+    "stem": "Regarding materno-foetal immunology:",
     "options": {
       "A": "Maternal IgG crosses the placenta to confer passive immunity to the foetus",
       "B": "Maternal antibodies rarely cross the placenta",
@@ -23732,12 +23761,14 @@
   {
     "code": "MF04a",
     "displayCode": "MF04a",
-    "papers": [],
+    "papers": [
+      "Apr01"
+    ],
     "topicFile": "MCQ-Maternal-Foetal.txt",
     "topicName": "Maternal / Foetal",
     "section": "FOETAL CIRCULATION",
     "parentCode": null,
-    "stem": "Apr 2001: With regard to the foetal circulation:",
+    "stem": "With regard to the foetal circulation:",
     "options": {
       "A": "Blood from SVC goes into the left atrium via the ductus arteriosus",
       "B": "Ductus venosus drains into the IVC directly",
@@ -23802,12 +23833,14 @@
   {
     "code": "MF06c",
     "displayCode": "MF06c",
-    "papers": [],
+    "papers": [
+      "Jul03"
+    ],
     "topicFile": "MCQ-Maternal-Foetal.txt",
     "topicName": "Maternal / Foetal",
     "section": "FOETAL CIRCULATION",
     "parentCode": null,
-    "stem": "Alt version Jul03: Foetal circulation:",
+    "stem": "Foetal circulation:",
     "options": {
       "A": "O2 tension (not saturation) of the umbilical artery is lower than in the maternal uterine vein",
       "B": "Foetal haemoglobin has a lower affinity for O2 than adult haemoglobin, which increases delivery to foetal tissues",
@@ -24353,13 +24386,15 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
-    "papers": [],
+    "displayCode": "GP27 (MD copy)",
+    "papers": [
+      "Jul04"
+    ],
     "topicFile": "MCQ-Miscellaneous-Pharmacology.txt",
     "topicName": "Miscellaneous Pharmacology",
     "section": "ANTI-EMETICS & GASTROINTESTINAL",
     "parentCode": null,
-    "stem": "MD GP27 [Jul04] Comparing dexamethasone and hydrocortisone:",
+    "stem": "Comparing dexamethasone and hydrocortisone:",
     "options": {
       "A": "Both are endogenous hormones",
       "B": "Dexamethasone has 8 times the anti-inflammatory potency of hydrocortisone",
@@ -24368,14 +24403,14 @@
       "E": "Dexamethasone has 25 times the anti-inflammatory potency of hydrocortisone and no sodium-retaining activity"
     },
     "answer": "E",
-    "reason": "Black Bank key corrected, and explained, by the tracker's GPT audit (gpt-5.6-sol, prescribed-text grounded), 2026-09-08 — not examiner-verified.\n\nDexamethasone has approximately 25 times the anti-inflammatory potency of hydrocortisone and no sodium-retaining activity (Stoelting, p.288; Evers, p.823). D is incorrect: water solubility depends on the preparation; dexamethasone sodium phosphate is water soluble, and hydrocortisone sodium phosphate is also available for IV use.",
+    "reason": "Duplicate of GP27 in this topic: the Black Bank's Miscellaneous Drugs file carried a second copy of the same Jul04 question. Parked so it is not served twice — study GP27.\n\nBlack Bank key corrected, and explained, by the tracker's GPT audit (gpt-5.6-sol, prescribed-text grounded), 2026-09-08 — not examiner-verified.\n\nDexamethasone has approximately 25 times the anti-inflammatory potency of hydrocortisone and no sodium-retaining activity (Stoelting, p.288; Evers, p.823). D is incorrect: water solubility depends on the preparation; dexamethasone sodium phosphate is water soluble, and hydrocortisone sodium phosphate is also available for IV use.",
     "urls": [],
-    "disputed": false,
+    "disputed": true,
     "id": "miscellaneous-pharmacology__OA01"
   },
   {
     "code": "OA02",
-    "displayCode": "OA02",
+    "displayCode": "GP29 (MD copy)",
     "papers": [],
     "topicFile": "MCQ-Miscellaneous-Pharmacology.txt",
     "topicName": "Miscellaneous Pharmacology",
@@ -24390,9 +24425,9 @@
       "E": "Domperidone"
     },
     "answer": "E",
-    "reason": "Explanation supplied in the tracker's curated copy, 2026-09-08 — the key is the Black Bank's and is not examiner-verified.\n\nDomperidone has the least penetration of an intact BBB and therefore predominantly peripheral D2-antagonist activity. By contrast, Evers states that metoclopramide readily crosses the BBB (p.860), 5-HT3 antagonists easily cross it (p.863), and droperidol may be retained in the brain (p.861). Scopolamine has prominent central effects.",
+    "reason": "Duplicate of GP29 (General Pharmacology): the Black Bank's Miscellaneous Drugs file carried a second copy of the same question. Parked so it is not served twice — study GP29.\n\nExplanation supplied in the tracker's curated copy, 2026-09-08 — the key is the Black Bank's and is not examiner-verified.\n\nDomperidone has the least penetration of an intact BBB and therefore predominantly peripheral D2-antagonist activity. By contrast, Evers states that metoclopramide readily crosses the BBB (p.860), 5-HT3 antagonists easily cross it (p.863), and droperidol may be retained in the brain (p.861). Scopolamine has prominent central effects.",
     "urls": [],
-    "disputed": false,
+    "disputed": true,
     "id": "miscellaneous-pharmacology__OA02"
   },
   {
@@ -24507,8 +24542,12 @@
   },
   {
     "code": "MD18",
-    "displayCode": "MD18",
-    "papers": [],
+    "displayCode": "MD18 v2",
+    "papers": [
+      "Jul00",
+      "Jul02",
+      "Jul03"
+    ],
     "topicFile": "MCQ-Miscellaneous-Pharmacology.txt",
     "topicName": "Miscellaneous Pharmacology",
     "section": "ANTI-EMETICS & GASTROINTESTINAL",
@@ -24529,7 +24568,7 @@
   },
   {
     "code": "MD18",
-    "displayCode": "MD18",
+    "displayCode": "MD18 v3",
     "papers": [
       "Apr 2001"
     ],
@@ -24537,7 +24576,7 @@
     "topicName": "Miscellaneous Pharmacology",
     "section": "ANTI-EMETICS & GASTROINTESTINAL",
     "parentCode": null,
-    "stem": "version: Decrease gastric pH:",
+    "stem": "Decrease gastric pH:",
     "options": {
       "A": "Calcium salts",
       "B": "H2 antagonists (?ranitidine)",
@@ -25008,7 +25047,7 @@
   },
   {
     "code": "OA03",
-    "displayCode": "OA03",
+    "displayCode": "MD (uncoded)",
     "papers": [],
     "topicFile": "MCQ-Miscellaneous-Pharmacology.txt",
     "topicName": "Miscellaneous Pharmacology",
@@ -25054,13 +25093,15 @@
   },
   {
     "code": "OA04",
-    "displayCode": "OA04",
-    "papers": [],
+    "displayCode": "MD51",
+    "papers": [
+      "Jul01"
+    ],
     "topicFile": "MCQ-Miscellaneous-Pharmacology.txt",
     "topicName": "Miscellaneous Pharmacology",
     "section": "IV FLUIDS",
     "parentCode": null,
-    "stem": "FE MD51 [Jul01] An intravenous infusion of 8.4% sodium bicarbonate to a healthy adult may cause:",
+    "stem": "An intravenous infusion of 8.4% sodium bicarbonate to a healthy adult may cause:",
     "options": {
       "A": "Hypotonicity",
       "B": "Intracellular acidosis",
@@ -25361,7 +25402,7 @@
   },
   {
     "code": "MD27",
-    "displayCode": "MD27",
+    "displayCode": "MD27 v2",
     "papers": [
       "July 2000"
     ],
@@ -25369,7 +25410,7 @@
     "topicName": "Miscellaneous Pharmacology",
     "section": "COAGULATION",
     "parentCode": null,
-    "stem": "version: Aspirin:",
+    "stem": "Aspirin:",
     "options": {
       "A": "Its plasma half-life is 4 hours",
       "B": "Its peak plasma concentration occurs within 10 minutes of oral administration",
@@ -25461,7 +25502,7 @@
   },
   {
     "code": "MD05",
-    "displayCode": "MD05",
+    "displayCode": "MD05 v2",
     "papers": [
       "Mar96"
     ],
@@ -25509,7 +25550,7 @@
   },
   {
     "code": "MD25",
-    "displayCode": "MD25",
+    "displayCode": "MD25 v2",
     "papers": [
       "July 2000"
     ],
@@ -25517,7 +25558,7 @@
     "topicName": "Miscellaneous Pharmacology",
     "section": "COAGULATION",
     "parentCode": null,
-    "stem": "version: Phenylbutazone's effect on the coagulation system are due to:",
+    "stem": "Phenylbutazone's effect on the coagulation system are due to:",
     "options": {
       "A": "Binding to albumen, displacing warfarin",
       "B": "Inhibiting warfarin metabolism",
@@ -25533,7 +25574,7 @@
   },
   {
     "code": "MD27",
-    "displayCode": "MD27",
+    "displayCode": "MD27 v3",
     "papers": [
       "Jul98",
       "Jul99",
@@ -25559,7 +25600,7 @@
   },
   {
     "code": "MD27",
-    "displayCode": "MD27",
+    "displayCode": "MD27 v4",
     "papers": [
       "July 2000"
     ],
@@ -25583,7 +25624,7 @@
   },
   {
     "code": "MD46",
-    "displayCode": "MD46",
+    "displayCode": "MD46 v2",
     "papers": [
       "Apr01"
     ],
@@ -26852,7 +26893,7 @@
   },
   {
     "code": "EN02",
-    "displayCode": "EN02",
+    "displayCode": "EN02 v2",
     "papers": [
       "Jul 01"
     ],
@@ -27645,7 +27686,7 @@
   },
   {
     "code": "MD22",
-    "displayCode": "MD22",
+    "displayCode": "MD22 v2",
     "papers": [
       "Mar99",
       "Apr01",
@@ -27671,7 +27712,7 @@
   },
   {
     "code": "MD32",
-    "displayCode": "MD32",
+    "displayCode": "MD32 v2",
     "papers": [
       "Jul99",
       "Jul04"
@@ -27718,13 +27759,13 @@
   },
   {
     "code": "15A-120",
-    "displayCode": "15A-120",
+    "displayCode": "15A-120 v2",
     "papers": [],
     "topicFile": "MCQ-Miscellaneous-Pharmacology.txt",
     "topicName": "Miscellaneous Pharmacology",
     "section": "OTHER",
     "parentCode": null,
-    "stem": "ALT Version: Regarding chemotherapy drugs and side effects:",
+    "stem": "Regarding chemotherapy drugs and side effects:",
     "options": {
       "A": "Doxirubicin - interstitial fibrosis",
       "B": "Cisplatin - pseudocholinesterase deficinecy",
@@ -27957,7 +27998,7 @@
   },
   {
     "code": "MB12",
-    "displayCode": "MB12",
+    "displayCode": "MB12 v2",
     "papers": [
       "July 2000"
     ],
@@ -27965,7 +28006,7 @@
     "topicName": "Muscle Relaxants / Reversal",
     "section": "NMBA PHARMACODYNAMICS",
     "parentCode": null,
-    "stem": "version: Which is incorrect re Mivacurium:",
+    "stem": "Which is incorrect re Mivacurium:",
     "options": {
       "A": "Twice the ED95 dose is 1.5mg/kg",
       "B": "is metabolised at 80 to 90% the rate of suxamethonium",
@@ -28514,13 +28555,13 @@
   },
   {
     "code": "MB26",
-    "displayCode": "MB26",
+    "displayCode": "MB26 v2",
     "papers": [],
     "topicFile": "MCQ-Muscle-Relaxants-Reversal-Agents.txt",
     "topicName": "Muscle Relaxants / Reversal",
     "section": "NMBA VARIABILITY IN RESPONSE",
     "parentCode": null,
-    "stem": "Alt version: Which of the following decreases the duration/depth of neuromuscular blockade?",
+    "stem": "Which of the following decreases the duration/depth of neuromuscular blockade?",
     "options": {
       "A": "Enflurane at 2 MAC",
       "B": "Aminoglycosides",
@@ -29099,7 +29140,7 @@
     "topicName": "Muscle Relaxants / Reversal",
     "section": "AND",
     "parentCode": null,
-    "stem": "Which of the following is the most harmful effect of Atropine in children ? (repeat)",
+    "stem": "Which of the following is the most harmful effect of Atropine in children?",
     "options": {
       "A": "Hypotension",
       "B": "Tachycardia",
@@ -29975,13 +30016,13 @@
   },
   {
     "code": "MD14",
-    "displayCode": "MD14",
+    "displayCode": "MD14 v2",
     "papers": [],
     "topicFile": "MCQ-Muscle-Relaxants-Reversal-Agents.txt",
     "topicName": "Muscle Relaxants / Reversal",
     "section": "o OCP",
     "parentCode": null,
-    "stem": "Alt version: Dantrolene:",
+    "stem": "Dantrolene:",
     "options": {
       "A": "Benzylisoquinolonium",
       "B": "Undergoes hepatic and renal metabolism",
@@ -31846,7 +31887,7 @@
   },
   {
     "code": "15A-134",
-    "displayCode": "15A-134",
+    "displayCode": "15A-134 v2",
     "papers": [],
     "topicFile": "MCQ-Opioids.txt",
     "topicName": "Opioids",
@@ -32422,7 +32463,7 @@
   },
   {
     "code": "MD04",
-    "displayCode": "MD04",
+    "displayCode": "MD04 v2",
     "papers": [
       "Apr 2001"
     ],
@@ -32430,7 +32471,7 @@
     "topicName": "Pain Management",
     "section": "NSAIDS/PARACETAMOL",
     "parentCode": null,
-    "stem": "version: Paracetamol:",
+    "stem": "Paracetamol:",
     "options": {
       "A": "Frequently causes dyspepsia (?gastric irritation)",
       "B": "Acid-base abnormalities common with overdose",
@@ -32473,7 +32514,7 @@
   },
   {
     "code": "MD04",
-    "displayCode": "MD04",
+    "displayCode": "MD04 v3",
     "papers": [],
     "topicFile": "MCQ-Pain-Management.txt",
     "topicName": "Pain Management",
@@ -32895,13 +32936,13 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
+    "displayCode": "IV17",
     "papers": [],
     "topicFile": "MCQ-Pain-Management.txt",
     "topicName": "Pain Management",
     "section": "NMDA ANTAGONISTS",
     "parentCode": null,
-    "stem": "IV17: Ketamine:",
+    "stem": "Ketamine:",
     "options": {
       "A": "Direct acting negative inotope",
       "B": "?Indirectly acts on sympathetic nervous system peripherally",
@@ -33339,13 +33380,13 @@
   },
   {
     "code": "14A-149",
-    "displayCode": "14A-149",
+    "displayCode": "14A-149 (NP02)",
     "papers": [],
     "topicFile": "MCQ-Procedural-Anatomy.txt",
     "topicName": "Procedural Anatomy",
     "section": "VASCULAR ACCESS",
     "parentCode": null,
-    "stem": "NP02 The SVC is formed by the union of:",
+    "stem": "The SVC is formed by the union of:",
     "options": {
       "A": "the R brachiocephalic and L subclavian",
       "B": "the R brachiocephalic and L IJV",
@@ -33515,13 +33556,16 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
-    "papers": [],
+    "displayCode": "NP03",
+    "papers": [
+      "13B",
+      "15A"
+    ],
     "topicFile": "MCQ-Procedural-Anatomy.txt",
     "topicName": "Procedural Anatomy",
     "section": "NEURAXIAL & REGIONAL BLOCKADE",
     "parentCode": null,
-    "stem": "NP03-13B-15A The epidural space does NOT contain the following:",
+    "stem": "The epidural space does NOT contain the following:",
     "options": {
       "A": "Epidural fat",
       "B": "Epidural veins",
@@ -33629,13 +33673,13 @@
   },
   {
     "code": "14A-141",
-    "displayCode": "14A-141",
+    "displayCode": "14A-141 (NP03)",
     "papers": [],
     "topicFile": "MCQ-Procedural-Anatomy.txt",
     "topicName": "Procedural Anatomy",
     "section": "NEURAXIAL & REGIONAL BLOCKADE",
     "parentCode": null,
-    "stem": "NP03 The epidural space does NOT contain:",
+    "stem": "The epidural space does NOT contain:",
     "options": {
       "A": "Fat",
       "B": "connective tissue",
@@ -34793,7 +34837,7 @@
     "topicName": "Renal",
     "section": "GLOMERULAR AND TUBULAR FUNCTION",
     "parentCode": null,
-    "stem": "The juxtaglomerular apparatus (repeat)",
+    "stem": "The juxtaglomerular apparatus",
     "options": {
       "A": "Macula densa is located in the PROXIMAL ascending loop",
       "B": "Granular cells are in the wall of the afferent arteriole",
@@ -35661,7 +35705,7 @@
     "topicName": "Renal",
     "section": "MEASUREMENT OF RENAL FUNCTION",
     "parentCode": null,
-    "stem": "Alt version: If a substance is found in the urine at a HIGHER concentration than inulin, then",
+    "stem": "If a substance is found in the urine at a HIGHER concentration than inulin, then",
     "options": {
       "A": "It must be filtered more",
       "B": "It is secreted into the lumen",
@@ -37534,13 +37578,15 @@
   },
   {
     "code": "OA01",
-    "displayCode": "OA01",
-    "papers": [],
+    "displayCode": "RE10 alt",
+    "papers": [
+      "Jul03"
+    ],
     "topicFile": "MCQ-Respiratory.txt",
     "topicName": "Respiratory",
     "section": "GAS TRANSPORT IN BLOOD",
-    "parentCode": null,
-    "stem": "RE10Jul03 If cardiac output is constant and the OHDC is unchanged, mixed venous oxygen TENSION is decreased in:",
+    "parentCode": "RE10",
+    "stem": "If cardiac output is constant and the OHDC is unchanged, mixed venous oxygen TENSION is decreased in:",
     "options": {
       "A": "Cyanide toxicity",
       "B": "Anaemia",
@@ -39497,7 +39543,7 @@
   },
   {
     "code": "ED12",
-    "displayCode": "ED12",
+    "displayCode": "ED12 v2",
     "papers": [
       "Jul97",
       "Jul01"

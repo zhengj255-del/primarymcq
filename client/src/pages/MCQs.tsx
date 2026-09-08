@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SittingTag } from "@/components/SittingTag";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,7 @@ function McqDetail({ mcq, onClose }: { mcq: McqRecord; onClose: () => void }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <CardTitle className="text-base font-mono" data-testid="text-mcq-code">{mcq.displayCode}</CardTitle>
+              <SittingTag code={mcq.code} papers={mcq.papers} className="text-xs" testId="badge-mcq-sitting" />
               <Badge variant="outline" className="text-xs max-w-full whitespace-normal">{mcq.topicName}</Badge>
               {mcq.disputed && (
                 <Badge variant="destructive" className="text-xs gap-1">
@@ -53,9 +54,10 @@ function McqDetail({ mcq, onClose }: { mcq: McqRecord; onClose: () => void }) {
                 </Badge>
               )}
             </div>
-            {mcq.section && (
-              <div className="text-xs text-muted-foreground mt-1 truncate" title={mcq.section}>{mcq.section}</div>
-            )}
+            <div className="text-xs text-muted-foreground mt-1 truncate" title={mcq.section ?? undefined}>
+              <span className="font-mono" data-testid="text-mcq-code">{mcq.displayCode}</span>
+              {mcq.section ? ` · ${mcq.section}` : ""}
+            </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Button
@@ -184,14 +186,11 @@ function McqRow({
       data-testid={`row-mcq-${mcq.id}`}
     >
       <div className="flex items-center gap-2 mb-1 flex-wrap">
-        <span className="font-mono text-xs font-semibold" data-testid={`text-code-${mcq.id}`}>{mcq.displayCode}</span>
+        {/* The sitting(s) the question is known from — from its code (25A-1 →
+            2025.1) and its paper tags (Jul97 → 1997.2) alike. The letter code
+            lives in the detail panel, not here. */}
+        <SittingTag code={mcq.code} papers={mcq.papers} className="text-[10px]" testId={`badge-sitting-${mcq.id}`} />
         <Badge variant="outline" className="text-[10px]">{mcq.topicName}</Badge>
-        {mcq.papers.slice(0, 4).map((p, i) => (
-          <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{p}</span>
-        ))}
-        {mcq.papers.length > 4 && (
-          <span className="text-[10px] text-muted-foreground">+{mcq.papers.length - 4}</span>
-        )}
         {mcq.disputed && (
           <Badge variant="destructive" className="text-[10px] gap-0.5 py-0 px-1.5">
             <AlertCircle className="h-2.5 w-2.5" />

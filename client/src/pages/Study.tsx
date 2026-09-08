@@ -15,6 +15,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient, isHttpRefusal } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SittingTag } from "@/components/SittingTag";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1075,9 +1076,7 @@ function SessionRunner({ session, onFinish, resume }: { session: StartResp; onFi
       <Card data-testid="card-question">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="secondary" className="text-[10px] font-mono" data-testid="text-mcq-code">
-              {mcq.displayCode}
-            </Badge>
+            <SittingTag code={mcq.code} papers={mcq.papers} className="text-[10px]" testId="badge-mcq-sitting" />
             <Badge variant="outline" className="text-[10px]">{mcq.topicName}</Badge>
             {mcq.disputed && (
               <Badge variant="destructive" className="text-[10px] gap-1">
