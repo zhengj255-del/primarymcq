@@ -427,7 +427,15 @@ export default function MCQsPage() {
         <div>
           <h1 className="text-2xl font-serif" data-testid="text-page-title">MCQs</h1>
           <p className="text-sm text-muted-foreground">
-            Kerry Brandis Black Bank — physiology past questions with reasoning and paper history.
+            {/* This said "Kerry Brandis Black Bank — physiology past questions", and was wrong three
+                ways: the Black Bank is 1,586 of the 2,366 (the rest are the released 2018 paper and the
+                2025-2026 recalls), pharmacology very nearly matches physiology (1,048 to 1,084, plus 234
+                measurement, equipment, anatomy and statistics), and "paper history" is now the exam
+                sitting each question is known from. The count is READ FROM THE STATS rather than typed
+                in, so the next corpus refresh cannot make this line a lie again. */}
+            {statsQuery.data ? `${statsQuery.data.total.toLocaleString()} ` : ""}ANZCA Primary questions
+            with worked answers — the Black Bank, the released 2018 paper and the 2025–2026 recalls,
+            across physiology, pharmacology and measurement.
           </p>
         </div>
         {statsQuery.data && (
