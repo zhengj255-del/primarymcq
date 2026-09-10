@@ -120,7 +120,7 @@ export const sessionFiltersSchema = z.object({
   topics: z.array(z.string()).optional(),         // topicSlug list; empty/undef = all
   domains: z.array(z.string()).optional(),        // domain key list; empty/undef = all
   loCodes: z.array(z.string()).optional(),        // LO code list; empty/undef = all
-  papers: z.array(z.string()).optional(),         // past-paper tags (e.g. "Apr01"); empty/undef = all
+  sittings: z.array(z.string()).optional(),       // exam-sitting keys (e.g. "2026B"); empty/undef = all
   completion: z.enum(["all", "completed", "not-completed", "review"]).optional(), // filter by prior-attempt status; "review" = never answered correctly (unseen + previously incorrect)
   srsSkipNew: z.boolean().optional(),             // SRS only: serve learning + reviews, no new intake this sitting
   weakAreas: z.boolean().optional(),              // auto-pick from lowest-accuracy topics

@@ -121,17 +121,24 @@ describe("corpus reads", () => {
     const res = await api("/api/mcqs/stats");
     expect(res.status).toBe(200);
     const s = await res.json();
-    expect(Object.keys(s).sort()).toEqual(["byTopic", "papers", "total", "withAnswer"]);
+    expect(Object.keys(s).sort()).toEqual(["byTopic", "sittings", "total", "withAnswer"]);
     expect(s.total).toBeGreaterThan(1800);
     expect(s.withAnswer).toBeGreaterThan(0);
     expect(s.withAnswer).toBeLessThanOrEqual(s.total);
     const gi = s.byTopic.find((t: any) => t.slug === TOPIC);
     expect(gi).toMatchObject({ slug: TOPIC, name: expect.any(String), domain: expect.any(String), count: topicTotal });
     expect(typeof gi.linked).toBe("number");
-    expect(s.papers.length).toBeGreaterThan(0);
-    for (const p of s.papers) {
-      expect(Object.keys(p).sort()).toEqual(["count", "sittable", "tag"]);
+    // Every sitting the bank knows, not just the MonYY-tagged ones: the 2014-2026 papers record their
+    // sitting in the question code, and listing only the tags stopped the picker dead at 2015.
+    expect(s.sittings.length).toBeGreaterThan(40);
+    for (const p of s.sittings) {
+      expect(Object.keys(p).sort()).toEqual(["count", "key", "label", "sittable"]);
     }
+    // Most recent first, and the modern sittings are actually in there.
+    expect(s.sittings[0].label).toMatch(/^20\d\d(\.[12])?$/);
+    const labels = s.sittings.map((p: any) => p.label);
+    expect(labels).toContain("2026.2");
+    expect(labels).toContain("2025.1");
   });
 
   it("GET /api/mcqs pages and filters", async () => {

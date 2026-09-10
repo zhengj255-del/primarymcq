@@ -60,7 +60,9 @@ interface AttemptResp {
 interface McqStats {
   total: number; withAnswer: number;
   byTopic: Array<{ slug: string; name: string; domain: string; count: number; linked: number }>;
-  papers: Array<{ tag: string; count: number; sittable?: number }>;
+  // Every exam sitting the bank knows, newest first: `key` is what a session filter takes ("2026B"),
+  // `label` is how the college names it ("2026.2").
+  sittings: Array<{ key: string; label: string; count: number; sittable?: number }>;
 }
 
 type Mode = "test" | "tutor" | "srs";
@@ -321,7 +323,7 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
   const [timeLimitMin, setTimeLimitMin] = useState<number>(0);
   // "Sit a real paper": constrains the pool to one past-paper tag and sizes
   // the session to the whole paper — the most authentic practice available.
-  const [paper, setPaper] = useState<string>("all");
+  const [paper, setPaper] = useState<string>("all");   // a sitting key ("2026B"), or "all"
 
   // SRS mode is Anki, not a quiz builder: the sitting is "today's work"
   // (learning + due reviews + new intake under the daily limits), so the
@@ -383,7 +385,7 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
         srsSkipNew: (srs && skipNew) || undefined,
         weakAreas: (!srs && weakAreas) || undefined,
         count,
-        papers: !srs && paper !== "all" ? [paper] : undefined,
+        sittings: !srs && paper !== "all" ? [paper] : undefined,
         timeLimitSec: mode === "test" && timeLimitMin > 0 ? timeLimitMin * 60 : null,
       };
       const res = await apiRequest("POST", "/api/mcqs/session", payload);
@@ -574,7 +576,7 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
             onValueChange={(v) => {
               setPaper(v);
               if (v !== "all") {
-                const p = statsQ.data?.papers.find((x) => x.tag === v);
+                const p = statsQ.data?.sittings.find((x) => x.key === v);
                 // Sit what the pool can actually SERVE — requesting the
                 // corpus count silently delivered fewer ("the full paper"
                 // served 96 of 103) and the sitting was scored out of the
@@ -586,8 +588,11 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
             <SelectTrigger className="h-9 w-56" data-testid="select-paper"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Any (no paper constraint)</SelectItem>
-              {(statsQ.data?.papers ?? []).map((p) => (
-                <SelectItem key={p.tag} value={p.tag}>{p.tag} · {p.count} Qs</SelectItem>
+              {/* Labelled the way the college names them ("2026.2"), not by the corpus's internal
+                  MonYY tag. The list now includes every sitting the bank holds — it was built from
+                  MonYY tags alone and stopped at 2015, so the 2025 and 2026 recalls were unsittable. */}
+              {(statsQ.data?.sittings ?? []).map((p) => (
+                <SelectItem key={p.key} value={p.key}>{p.label} · {p.count} Qs</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -595,7 +600,7 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
             <span className="text-xs text-muted-foreground" data-testid="paper-mode-note">
               {paperSittingNote(mode)}
               {(() => {
-                const p = statsQ.data?.papers.find((x) => x.tag === paper);
+                const p = statsQ.data?.sittings.find((x) => x.key === paper);
                 if (!p) return "";
                 // Attribute any gap between the paper's corpus size and what
                 // this sitting will serve, BEFORE the user commits.
