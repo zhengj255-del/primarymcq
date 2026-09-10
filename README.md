@@ -146,6 +146,24 @@ Types for the request and response shapes are in `shared/schema.ts`.
 
 `server/data/mcqs.json` is the tracker's question bank **with the tracker's curated answers folded in** — the Black Bank questions as its owner has corrected them, plus the recalled sittings in `corpus/additions-2025-2026-recalls.json` (513 questions from the 2025.1, 2026.1 and 2026.2 papers; see `corpus/README.md`). It is a copy, not a source: the tracker's database holds the answers, and its `MCQ recall bake` workflow writes them out as `corpus/primarymcq-corpus.json` in the tracker's repository. To refresh, copy that file over this repository's `server/data/mcqs.json`, run `node corpus/apply-figure-explanations.mjs`, then `npm run check && npm test`, and push; the deploy workflow does the rest. That middle step is not optional: a few questions point at a plate the tracker does not have and their explanations are written against it, so a wholesale copy takes them out — `corpus/figure-explanations.json` holds them and the figure tests fail until they are back. At boot the server hashes the file; when the hash differs from the one stored in `mcq_meta` it wipes and re-ingests `mcqs` and `mcq_lo_links` (learning-objective links are re-derived). Everything keyed by question id — edits in `mcq_overrides`, attempts, SRS state, sessions — is untouched, so progress survives a refresh as long as question ids stay stable; where a refresh changes the key of a question already attempted, the stored correctness of those attempts is re-derived against the new key at that boot. Records still carry a `disputed` field from the tracker; this app ignores it (see **No disputes** below) but it is left in the file so the same corpus still drops into the tracker unchanged. `client/public/mcq-figures/*.svg` are the figures some questions reference; copy new ones across too if the corpus gains any.
 
+### Exam sittings
+
+Which paper a question is from lives in **two** places in the corpus: the question **code** for the
+2014-2026 papers (`26B-14` is 2026.2), and MonYY **paper tags** for the 1996-2015 Black Bank (`Feb12` is
+2012.1). `shared/mcqSittings.ts` is the one thing that reads both, and every surface goes through it —
+the sitting badge on a question, the "Sit a real paper" picker, and the session filter behind it.
+
+At ingest each question's sittings are cached in `mcqs.sittings`, a space-padded list of keys
+(`" 2026B 2018A "`), so a filter is one `instr` instead of re-parsing every row. A database that predates
+the column gains it and has its stored corpus hash cleared, which makes the next boot re-ingest and fill
+it; `mcqs` and `mcq_lo_links` are derived tables, so nothing of yours is at stake.
+
+This was worth centralising: `getMcqStats` used to carry its own narrower rule that read MonYY tags only,
+so the picker listed 33 papers ending at 2015 and could not see the 1,363 questions (2014.1 onward,
+including the 2025 and 2026 recalls) whose sitting is recorded in the code — while the badge on those same
+questions read "2026.2" correctly. The session filter had the matching half of the bug, matching
+`papers LIKE '%Feb12%'` against the raw tag array, so asking to sit one of those papers selected nothing.
+
 ### No disputes
 
 There is no Disputes page and no `disputed` flag. Until September 2026 the corpus could park a

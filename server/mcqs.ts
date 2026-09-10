@@ -17,6 +17,12 @@ import { fileURLToPath } from "node:url";
 import { sqlite } from "./storage";
 import type { McqRecord } from "@shared/schema";
 import { LEARNING_OBJECTIVES } from "./learningObjectives";
+// The one definition of "which sitting is this question from". It reads BOTH places the corpus records
+// it — the question code ("26B-14" -> 2026.2) and the MonYY paper tags ("Feb12" -> 2012.1) — and it is
+// already what SittingTag badges the MCQs list with. getMcqStats used to hand-roll a narrower rule beside
+// it that saw MonYY tags only, so "Sit a real paper" listed nothing after 2015 while the badge on the very
+// same question read "2026.2".
+import { parseSittings, sittingsColumn, sittingLabel, parseSittingKey } from "@shared/mcqSittings";
 
 // Resolve the mcqs.json data file. Search a set of candidate paths so we
 // work in dev (tsx from the app root => server/data/mcqs.json), production
@@ -214,6 +220,7 @@ export function bootstrapMcqs(): void {
       answer TEXT,
       reason TEXT NOT NULL DEFAULT '',
       urls TEXT NOT NULL DEFAULT '[]',
+      sittings TEXT NOT NULL DEFAULT '',
       parent_code TEXT,
       figure TEXT
     );
@@ -297,6 +304,19 @@ export function bootstrapMcqs(): void {
     }
   }
 
+  // mcqs gained `sittings` — the cached, space-padded list of sitting keys (" 2026B 2018A ") that
+  // every scope filter and the paper picker read. It is DERIVED from code + papers, so a database that
+  // predates the column has to re-ingest rather than just gain an empty one: the stored corpus hash is
+  // cleared, which makes the ingest below run even though mcqs.json itself has not changed. Cheap (one
+  // wipe-and-rebuild of a derived table) and the alternative is a picker that silently lists nothing.
+  {
+    const cols = sqlite.prepare("PRAGMA table_info(mcqs)").all() as Array<{ name: string }>;
+    if (!new Set(cols.map((c) => c.name)).has("sittings")) {
+      sqlite.exec("ALTER TABLE mcqs ADD COLUMN sittings TEXT NOT NULL DEFAULT ''");
+      sqlite.prepare("DELETE FROM mcq_meta WHERE key = 'content_hash'").run();
+    }
+  }
+
   // mcqs gained `figure` for questions whose stem points at a graph/diagram
   // ("see graph below") that was never digitised. Existing databases predate
   // the column, so add it before any read touches it.
@@ -328,9 +348,9 @@ export function bootstrapMcqs(): void {
   const insert = sqlite.prepare(`
     INSERT OR REPLACE INTO mcqs
       (id, code, display_code, topic_file, topic_name, topic_slug, domain,
-       section, papers, stem, options, answer, reason, urls, parent_code,
+       section, papers, stem, options, answer, reason, urls, sittings, parent_code,
        figure)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const linkInsert = sqlite.prepare(
     "INSERT OR IGNORE INTO mcq_lo_links (mcq_id, lo_code) VALUES (?, ?)",
@@ -357,6 +377,7 @@ export function bootstrapMcqs(): void {
         rec.answer,
         rec.reason ?? "",
         JSON.stringify(rec.urls ?? []),
+        sittingsColumn(parseSittings(rec.code, rec.papers ?? [])),
         rec.parentCode,
         rec.figure ?? null,
       );
@@ -392,6 +413,7 @@ interface Row {
   answer: string | null;
   reason: string;
   urls: string;
+  sittings: string;
   parent_code: string | null;
   figure: string | null;
 }
@@ -828,7 +850,9 @@ export interface McqStats {
   byTopic: Array<{ slug: string; name: string; domain: string; count: number; linked: number }>;
   // Distinct past-paper tags with their question counts, newest tag first.
   // Powers the "sit a real paper" picker on the Study page.
-  papers: Array<{ tag: string; count: number; sittable: number }>;
+  // Every exam sitting the bank knows, newest first. `key` is what a session filter takes ("2026B"),
+  // `label` is how the college names it ("2026.2").
+  sittings: Array<{ key: string; label: string; count: number; sittable: number }>;
 }
 
 export function getMcqStats(): McqStats {
@@ -854,39 +878,44 @@ export function getMcqStats(): McqStats {
     GROUP BY topic_slug, topic_name, domain
     ORDER BY topic_name
   `).all() as Array<{ slug: string; name: string; domain: string; count: number; linked: number }>;
-  // Only canonical MonYY tags (Mar99, Jul04, …) are real sittings — the
-  // corpus's papers arrays also carry parse fragments ("d", "qr", "mnop")
-  // and stray long-form spellings ("July 2000") with 1-5 questions each.
-  // 33 canonical tags cover 1,322 of the 1,707 questions.
-  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const canonical = /^[A-Z][a-z]{2}\d{2}$/;
-  const paperSortKey = (tag: string): number => {
-    const mon = MONTHS.indexOf(tag.slice(0, 3));
-    const yy = Number(tag.slice(3));
-    const year = yy >= 90 ? 1900 + yy : 2000 + yy;
-    return year * 100 + (mon >= 0 ? mon : 0);
-  };
-  // Per paper: the corpus count AND what a session can actually serve — the
-  // pool predicate (effective answer, not discarded) trims most papers, and
-  // "Sit a real paper" must promise the SITTABLE size, not the corpus size
-  // (a paper with 103 questions serves fewer when some carry no key).
-  const paperCounts = new Map<string, number>();
-  const paperSittable = new Map<string, number>();
-  const paperRows = sqlite.prepare(`
-    SELECT papers,
+  // Every sitting the bank knows, from the CACHED column — which parseSittings filled at ingest from the
+  // question code AND the MonYY paper tags alike. This used to be a hand-rolled rule right here that
+  // accepted MonYY tags only, so it listed 33 papers ending at 2015 and could not see the 1,363 questions
+  // (14A-26B, including the 2025-2026 recalls) whose sitting lives in their code — while SittingTag, three
+  // files away, badged those same questions "2026.2" correctly. Two definitions of one thing, and the
+  // narrower one was wired to the picker.
+  //
+  // Per sitting: the corpus count AND what a session can actually serve, because "Sit a real paper" must
+  // promise the SITTABLE size — a paper with 103 questions serves fewer when some carry no key.
+  const sittingCounts = new Map<string, number>();
+  const sittingSittable = new Map<string, number>();
+  const sittingRows = sqlite.prepare(`
+    SELECT sittings,
            (CASE WHEN (SELECT o.answer FROM mcq_overrides o WHERE o.mcq_id = m.id) IS NOT NULL
                  THEN NULLIF((SELECT o.answer FROM mcq_overrides o WHERE o.mcq_id = m.id), '')
                  ELSE m.answer END IS NOT NULL) AS hasAnswer
-      FROM mcqs m WHERE ${notDiscarded}`).all() as Array<{ papers: string; hasAnswer: number }>;
-  for (const r of paperRows) {
-    for (const tag of safeParseArray(r.papers)) {
-      if (!canonical.test(tag) || MONTHS.indexOf(tag.slice(0, 3)) < 0) continue;
-      paperCounts.set(tag, (paperCounts.get(tag) ?? 0) + 1);
-      if (r.hasAnswer) paperSittable.set(tag, (paperSittable.get(tag) ?? 0) + 1);
+      FROM mcqs m WHERE ${notDiscarded}`).all() as Array<{ sittings: string; hasAnswer: number }>;
+  for (const r of sittingRows) {
+    // A question repeated across papers belongs to several sittings and counts in each.
+    for (const key of String(r.sittings ?? "").trim().split(/\s+/).filter(Boolean)) {
+      sittingCounts.set(key, (sittingCounts.get(key) ?? 0) + 1);
+      if (r.hasAnswer) sittingSittable.set(key, (sittingSittable.get(key) ?? 0) + 1);
     }
   }
-  const papers = Array.from(paperCounts.entries())
-    .map(([tag, count]) => ({ tag, count, sittable: paperSittable.get(tag) ?? 0 }))
-    .sort((a, b) => paperSortKey(b.tag) - paperSortKey(a.tag));
-  return { total, withAnswer, byTopic, papers };
+  const sittings = Array.from(sittingCounts.entries())
+    .map(([key, count]) => ({ key, count, sittable: sittingSittable.get(key) ?? 0 }))
+    .map((e) => ({ ...e, parsed: parseSittingKey(e.key) }))
+    .filter((e) => e.parsed !== null)
+    // Strictly most-recent-first, which means SECOND sitting before first within a year: 2026.2, 2026.1,
+    // 2025.2… Deliberately NOT compareSittings, whose documented contract is year-descending but
+    // sitting-ASCENDING within the year — right for SittingTag, which lists the sittings one question
+    // came from ("2025.1 · 2025.2" reads as a span), wrong for a picker whose whole ordering promise is
+    // "newest paper at the top". Same input, different question; see computeWeakTopicSlugs in mcqStudy.ts
+    // for the same call made for the same reason. A sitting whose half is unknown (the officially
+    // released OFF-2018 paper) sorts last within its year, since it cannot be placed against the other two.
+    .sort((a, b) =>
+      b.parsed!.year - a.parsed!.year ||
+      (b.parsed!.half ?? "").localeCompare(a.parsed!.half ?? ""))
+    .map((e) => ({ key: e.key, label: sittingLabel(e.parsed!), count: e.count, sittable: e.sittable }));
+  return { total, withAnswer, byTopic, sittings };
 }

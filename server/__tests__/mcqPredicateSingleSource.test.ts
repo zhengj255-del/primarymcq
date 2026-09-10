@@ -59,25 +59,27 @@ function trackDue(id: string): void {
   ).run(id, PAST, PAST, PAST);
 }
 
-let TAG: string;
+let SITTING: string;   // a sitting key, e.g. "2026B"
 let KEPT: string;      // an ordinary sittable question — the control
 let DISCARDED: string; // discarded by hand: the ONE way a question leaves the bank
-let paperBefore: { count: number; sittable: number };
+let sittingBefore: { count: number; sittable: number };
 
 describe("nothing is held out of the bank except a hand discard", () => {
   beforeAll(() => {
     sqlite.prepare("DELETE FROM mcq_overrides").run();
     sqlite.prepare("DELETE FROM mcq_srs_state").run();
 
-    const paper = getMcqStats().papers.find((p) => p.sittable >= 3);
-    expect(paper, "corpus sanity: a canonical paper with >= 3 sittable questions").toBeTruthy();
-    TAG = paper!.tag;
-    paperBefore = getMcqStats().papers.find((p) => p.tag === TAG)!;
+    const paper = getMcqStats().sittings.find((p) => p.sittable >= 3);
+    expect(paper, "corpus sanity: a sitting with >= 3 sittable questions").toBeTruthy();
+    SITTING = paper!.key;
+    sittingBefore = getMcqStats().sittings.find((p) => p.key === SITTING)!;
 
+    // Read from the cached, space-padded sittings column — the same one the picker counts and the
+    // session filter matches, so this fixture cannot drift from what it is testing.
     const ids = (sqlite.prepare(
-      `SELECT id FROM mcqs WHERE answer IS NOT NULL AND papers LIKE ? ORDER BY id LIMIT 2`,
-    ).all(`%"${TAG}"%`) as Array<{ id: string }>).map((r) => r.id);
-    expect(ids.length, `corpus sanity: 2 answered ${TAG} questions`).toBe(2);
+      `SELECT id FROM mcqs WHERE answer IS NOT NULL AND instr(sittings, ?) > 0 ORDER BY id LIMIT 2`,
+    ).all(` ${SITTING} `) as Array<{ id: string }>).map((r) => r.id);
+    expect(ids.length, `corpus sanity: 2 answered ${SITTING} questions`).toBe(2);
     [KEPT, DISCARDED] = ids;
     for (const id of ids) trackDue(id);
   });
@@ -110,7 +112,7 @@ describe("nothing is held out of the bank except a hand discard", () => {
 
     expect(sittableIdsFromConstant()).not.toContain(DISCARDED);
     expect(allIdsFromListFilter()).not.toContain(DISCARDED);
-    expect(getMcqStats().papers.find((p) => p.tag === TAG)!.sittable).toBe(paperBefore.sittable - 1);
+    expect(getMcqStats().sittings.find((p) => p.key === SITTING)!.sittable).toBe(sittingBefore.sittable - 1);
     // …and out of the SRS queue too, through the s-aliased form.
     const srsIds = (sqlite.prepare(
       `SELECT s.mcq_id AS id FROM mcq_srs_state s WHERE ${SRS_SITTABLE_SQL} ORDER BY s.mcq_id`,
@@ -123,7 +125,7 @@ describe("nothing is held out of the bank except a hand discard", () => {
     updateMcqOverride(DISCARDED, { excluded: null });
     expect(sittableIdsFromConstant()).toContain(DISCARDED);
     expect(allIdsFromListFilter()).toContain(DISCARDED);
-    expect(getMcqStats().papers.find((p) => p.tag === TAG)!.sittable).toBe(paperBefore.sittable);
+    expect(getMcqStats().sittings.find((p) => p.key === SITTING)!.sittable).toBe(sittingBefore.sittable);
   });
 
   it("a sitting over the whole bank draws only from the sittable set", () => {

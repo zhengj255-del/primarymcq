@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { sqlite, appTzDateISO, todayISO, addDaysISO, daysBetweenISO, localMidnightMs } from "./storage";
 import { EFFECTIVE_ANSWER_SQL, NOT_DISCARDED_SQL, SRS_SITTABLE_SQL, WEAK_AREAS_SQL } from "./mcqSittable";
+import { parseSittingKey, sittingNeedle, type McqSitting } from "@shared/mcqSittings";
 import type {
   SessionFilters, SubmitAttempt, SessionSummary, McqUserStats,
   McqRecord, McqStudySession,
@@ -69,11 +70,26 @@ function scopeWhere(filters: SessionFilters): { where: string[]; params: unknown
     );
     params.push(...filters.loCodes);
   }
-  if (filters.papers && filters.papers.length > 0) {
-    // papers is a JSON array column; substring-match each quoted tag (same
-    // technique as listMcqs' paper filter). Enables "sit the Apr01 paper".
-    where.push(`(${filters.papers.map(() => "m.papers LIKE ?").join(" OR ")})`);
-    params.push(...filters.papers.map((p) => `%${JSON.stringify(p).slice(1, -1)}%`));
+  if (filters.sittings && filters.sittings.length > 0) {
+    // Matched against the CACHED sittings column, which parseSittings filled at ingest from the question
+    // code and the MonYY paper tags alike. It used to be `m.papers LIKE '%Feb12%'` over the raw tag array,
+    // which could only ever match a MonYY tag — so "sit the 2026.2 paper" selected nothing, because that
+    // sitting is recorded in the code ("26B-14") and never appears in `papers`.
+    //
+    // The column is space-padded (" 2026B 2018A "), and the needle carries its own spaces, so a substring
+    // test cannot match across two adjacent keys or confuse "2026B" with a longer key that contains it.
+    const needles = filters.sittings
+      .map((key) => parseSittingKey(key))
+      .filter((s): s is McqSitting => s !== null)
+      .map((s) => sittingNeedle(s.year, s.half ?? undefined));
+    if (needles.length > 0) {
+      where.push(`(${needles.map(() => "instr(m.sittings, ?) > 0").join(" OR ")})`);
+      params.push(...needles);
+    } else {
+      // Every key was unparseable. Selecting nothing is right — silently serving the WHOLE bank as
+      // "the paper you asked for" is the one outcome a candidate must never get.
+      where.push("1 = 0");
+    }
   }
   return { where, params };
 }
