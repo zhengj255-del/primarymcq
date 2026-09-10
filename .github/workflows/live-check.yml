@@ -33,9 +33,11 @@ jobs:
           node -e '
             const c = require("./server/data/mcqs.json");
             const keyed = c.filter((q) => q.answer).length;
-            const disputed = c.filter((q) => q.disputed).length;
-            console.log(`repo corpus: ${c.length} questions, ${keyed} with a key, ${disputed} disputed`);
-            require("fs").writeFileSync("expected.json", JSON.stringify({ total: c.length, withAnswer: keyed, disputed }));
+            console.log(`repo corpus: ${c.length} questions, ${keyed} with a key`);
+            // No `disputed` count: the field is still in the corpus but this
+            // app ignores it (README, "No disputes"), so it is neither in
+            // /api/mcqs/stats nor a fact about what the site will serve.
+            require("fs").writeFileSync("expected.json", JSON.stringify({ total: c.length, withAnswer: keyed }));
           '
 
       - name: What the live site says
@@ -61,12 +63,12 @@ jobs:
           fi
           echo "stats: HTTP $code"
           if [ "$code" != "200" ]; then echo "::error::/api/mcqs/stats answered $code"; head -c 300 stats.json; exit 1; fi
-          jq '{total, withAnswer, disputed}' stats.json
+          jq '{total, withAnswer}' stats.json
 
       - name: Do they agree?
         run: |
           set -euo pipefail
-          live=$(jq -c '{total, withAnswer, disputed}' stats.json)
+          live=$(jq -c '{total, withAnswer}' stats.json)
           want=$(jq -c '.' expected.json)
           echo "live:     $live"
           echo "expected: $want"
