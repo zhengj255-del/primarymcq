@@ -6,6 +6,8 @@ Recalled ANZCA Primary MCQ papers, converted into the exact record shape of `ser
 |---|---|
 | `additions-2025-2026-recalls.json` | The records. An object with `schema`, `generated`, `sources` (one line per sitting: code prefix, section label, where it came from, how many records) and `records`, the array of questions. |
 | `merge-additions.mjs` | Merges a records file into a `mcqs.json`, idempotently by `id`. No dependencies beyond Node. |
+| `figure-explanations.json` | This site's own explanations for the questions that point at a plate. Written here, against the drawing this site ships; the tracker has no plates, so its explanation for the same question cannot name what point D on our drawing is. |
+| `apply-figure-explanations.mjs` | Re-applies those explanations to `server/data/mcqs.json`. Run it after every corpus refresh — a refresh copies the tracker's file over wholesale and takes them out. Idempotent. |
 
 ## Sittings in the file
 

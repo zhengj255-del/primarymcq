@@ -5640,7 +5640,7 @@
       "E": "move to left"
     },
     "answer": "A",
-    "reason": "Phentolamine blocks α-adrenoceptors, producing arterial and venous dilation. Reduced vascular resistance, including resistance to venous return, increases the slope of the venous return curve, rotating or tilting it upward. Venodilation may slightly reduce mean systemic filling pressure, but the predominant graphical effect is the upward rotation caused by reduced resistance to venous return.\n\nSource: Guyton & Hall Physiology, p. 252",
+    "reason": "Phentolamine blocks α-adrenoceptors, producing arterial and venous dilation. Reduced resistance to venous return increases the slope of the vascular (venous return) function curve - the curve plotted here, venous return against right atrial pressure - so it rotates or tilts upward. Venodilation may slightly reduce mean systemic filling pressure, moving the x-intercept a little to the left, but the predominant graphical effect is the upward rotation caused by the reduced resistance to venous return.\n\nSource: Guyton & Hall Physiology, p. 252; Pappano & Wier (2018), Ch 10",
     "urls": [],
     "disputed": false,
     "id": "cardiovascular__18B-54"
@@ -12890,7 +12890,7 @@
       "E": "After the fresh gas flow inlet"
     },
     "answer": "A",
-    "reason": "At the patient/system interface, gas flows toward the patient during inspiration and away from the patient during expiration; flow at the Y-connector is therefore bidirectional. Elsewhere in a normally functioning circle system, inspiratory gas passes through the inspiratory unidirectional valve and limb, while expired gas returns through the expiratory limb and unidirectional valve before passing to the CO2 absorber. Thus the inspiratory limb and CO2 canister do not normally have bidirectional flow.\n\nSource: Function. In: StatPearls [Internet]; 2026. NCBI Bookshelf NBK572060; Parthasarathy S. The closed circuit and the low flow systems. Indian J Anaesth. 2013;57(5):516-24. PMID 24249885. doi:10.4103/0019-5049.120149",
+    "reason": "The common limb between the Y-piece and the patient carries inspired gas out and expired gas back through the same lumen, so it is bidirectional unconditionally - at any fresh gas flow and in any ventilation mode. The inspiratory and expiratory limbs are each guarded by a one-way valve, and gas leaving the APL valve goes only to scavenging. Caveat: option D is a defensible second answer, because with fresh gas flowing the soda lime does carry retrograde flow towards the reservoir bag during expiration (this is what the companion question 18B-116 tests); A remains the single best answer because it holds without any such precondition.",
     "urls": [],
     "disputed": false,
     "figure": "circle-system-plain",
@@ -12935,7 +12935,7 @@
       "E": "E"
     },
     "answer": "D",
-    "reason": "D is at a unidirectional valve. In a circle system, gas passes through the inspiratory unidirectional valve toward the patient, while expired gas travels down the expiratory limb and through the expiratory unidirectional valve. Flow at D therefore cannot be bidirectional; the valves enforce the circle system’s unidirectional movement of exhaled gas.\n\nSource: Parthasarathy S. The closed circuit and the low flow systems. Indian J Anaesth. 2013;57(5):516-24. PMID 24249885. doi:10.4103/0019-5049.120149; Function. In: StatPearls [Internet]; 2026. NCBI Bookshelf NBK572060",
+    "reason": "With fresh gas flowing, the inspiratory unidirectional valve is held shut during expiration, so continuing fresh gas cannot go forwards - it can only reach the compliant reservoir bag by travelling BACKWARDS along the rail and down through the absorbent. That makes the bag mount (E), the bag-to-absorber conduit (B), the canister and the absorber-to-fresh-gas rail (C) all bidirectional over the respiratory cycle, and the patient limb beyond the Y-piece (A) is bidirectional in every circumstance. The stub between the fresh gas inlet and the inspiratory valve (D) is the one segment bounded by the gas source upstream and a closed one-way valve downstream, so gas there only ever moves towards the patient. Precondition worth noting: at zero fresh gas flow the retrograde limb disappears and this distinction breaks down.",
     "urls": [],
     "disputed": false,
     "figure": "circle-system",
