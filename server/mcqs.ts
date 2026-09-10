@@ -17,12 +17,6 @@ import { fileURLToPath } from "node:url";
 import { sqlite } from "./storage";
 import type { McqRecord } from "@shared/schema";
 import { LEARNING_OBJECTIVES } from "./learningObjectives";
-// The one definition of "effectively disputed" (override wins over the base
-// column), shared with the study pools, the SRS counts and the list filter.
-// mcqSittable.ts is a leaf with no imports, so every reader can share the
-// predicate instead of growing a fourth copy that drifts — this file alone had
-// three, one per surface, all correct on the day they were typed.
-import { DISPUTED_SQL_M } from "./mcqSittable";
 
 // Resolve the mcqs.json data file. Search a set of candidate paths so we
 // work in dev (tsx from the app root => server/data/mcqs.json), production
@@ -195,7 +189,6 @@ interface ParsedMcq {
   answer: string | null;
   reason: string;
   urls: string[];
-  disputed: boolean;
   parentCode: string | null;
   figure?: string | null;
 }
@@ -221,7 +214,6 @@ export function bootstrapMcqs(): void {
       answer TEXT,
       reason TEXT NOT NULL DEFAULT '',
       urls TEXT NOT NULL DEFAULT '[]',
-      disputed INTEGER NOT NULL DEFAULT 0,
       parent_code TEXT,
       figure TEXT
     );
@@ -246,19 +238,62 @@ export function bootstrapMcqs(): void {
       options TEXT,
       answer TEXT,
       reason TEXT,
-      disputed INTEGER,
       updated_at INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS mcq_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `);
 
-  // mcq_overrides gained `excluded` for dispute triage: a discarded question
-  // stays visible in lists (badged) but drops out of study pools and SRS.
+  // mcq_overrides gained `excluded`: a discarded question stays visible in
+  // lists (badged) but drops out of study pools and SRS.
   {
     const cols = sqlite.prepare("PRAGMA table_info(mcq_overrides)").all() as Array<{ name: string }>;
     if (!new Set(cols.map((c) => c.name)).has("excluded")) {
       sqlite.exec("ALTER TABLE mcq_overrides ADD COLUMN excluded INTEGER");
+    }
+  }
+
+  // Retiring the Disputes page (Sep 2026) leaves two dead flags behind on an
+  // existing volume, and each one HIDES something with no screen left to
+  // release it:
+  //   mcq_overrides.excluded — a "discard" verdict. A discarded question is
+  //     filtered out of listMcqs, the stats and every pool, and the triage
+  //     queue was the only surface that still showed it. Left as-is it would
+  //     be gone from the app entirely.
+  //   mcq_overrides.disputed — a dispute raised or resolved by hand. Nothing
+  //     reads it any more; a row whose ONLY value was this flag would sit in
+  //     the override layer forever, and the `edited` badge already ignores it.
+  // Both are cleared once, and an override row emptied by the clear is
+  // deleted so the question reads as untouched rather than as a hollow edit.
+  // Nothing else in the row is touched: a stem, option, answer or reason edit
+  // survives, and the marker in mcq_meta stops this running twice. The
+  // COLUMNS stay — dropping them would rewrite a table on the user's volume
+  // for no gain, and no query reads them.
+  {
+    const done = sqlite.prepare("SELECT value FROM mcq_meta WHERE key = 'disputes_retired'").get() as
+      | { value: string } | undefined;
+    const cols = new Set((sqlite.prepare("PRAGMA table_info(mcq_overrides)").all() as Array<{ name: string }>)
+      .map((c) => c.name));
+    // Each column independently: a database created AFTER this change has
+    // neither and there is nothing to clear, and the two were added at
+    // different times, so neither implies the other.
+    const retired = ["excluded", "disputed"].filter((c) => cols.has(c));
+    if (!done && retired.length > 0) {
+      const freed = cols.has("excluded")
+        ? (sqlite.prepare("SELECT COUNT(*) c FROM mcq_overrides WHERE excluded = 1").get() as { c: number }).c
+        : 0;
+      const setNull = retired.map((c) => `${c} = NULL`).join(", ");
+      const anySet = retired.map((c) => `${c} IS NOT NULL`).join(" OR ");
+      const allNull = retired.map((c) => `${c} IS NULL`).join(" AND ");
+      sqlite.exec(`
+        UPDATE mcq_overrides SET ${setNull} WHERE ${anySet};
+        DELETE FROM mcq_overrides
+         WHERE stem IS NULL AND options IS NULL AND answer IS NULL AND reason IS NULL
+           AND ${allNull};
+      `);
+      sqlite.prepare("INSERT OR REPLACE INTO mcq_meta (key, value) VALUES ('disputes_retired', ?)")
+        .run(String(Date.now()));
+      if (freed > 0) console.log(`[mcqs] disputes retired — ${freed} discarded question(s) returned to the bank`);
     }
   }
 
@@ -293,9 +328,9 @@ export function bootstrapMcqs(): void {
   const insert = sqlite.prepare(`
     INSERT OR REPLACE INTO mcqs
       (id, code, display_code, topic_file, topic_name, topic_slug, domain,
-       section, papers, stem, options, answer, reason, urls, disputed, parent_code,
+       section, papers, stem, options, answer, reason, urls, parent_code,
        figure)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const linkInsert = sqlite.prepare(
     "INSERT OR IGNORE INTO mcq_lo_links (mcq_id, lo_code) VALUES (?, ?)",
@@ -322,7 +357,6 @@ export function bootstrapMcqs(): void {
         rec.answer,
         rec.reason ?? "",
         JSON.stringify(rec.urls ?? []),
-        rec.disputed ? 1 : 0,
         rec.parentCode,
         rec.figure ?? null,
       );
@@ -358,7 +392,6 @@ interface Row {
   answer: string | null;
   reason: string;
   urls: string;
-  disputed: number;
   parent_code: string | null;
   figure: string | null;
 }
@@ -369,7 +402,6 @@ interface OverrideRow {
   options: string | null;
   answer: string | null;
   reason: string | null;
-  disputed: number | null;
   excluded: number | null;
 }
 
@@ -378,7 +410,7 @@ function getOverrideMap(ids: string[]): Map<string, OverrideRow> {
   if (ids.length === 0) return out;
   const placeholders = ids.map(() => "?").join(",");
   const rows = sqlite.prepare(
-    `SELECT mcq_id, stem, options, answer, reason, disputed, excluded
+    `SELECT mcq_id, stem, options, answer, reason, excluded
      FROM mcq_overrides WHERE mcq_id IN (${placeholders})`,
   ).all(...ids) as OverrideRow[];
   for (const r of rows) out.set(r.mcq_id, r);
@@ -390,7 +422,6 @@ function rowToRecord(row: Row, loCodes: string[], ovr?: OverrideRow): McqRecord 
   let options = safeParseOptions(row.options);
   let answer: string | null = row.answer;
   let reason = row.reason;
-  let disputed = !!row.disputed;
   let edited = false;
   let excluded = false;
 
@@ -403,7 +434,6 @@ function rowToRecord(row: Row, loCodes: string[], ovr?: OverrideRow): McqRecord 
       edited = true;
     }
     if (ovr.reason !== null) { reason = ovr.reason; edited = true; }
-    if (ovr.disputed !== null) { disputed = !!ovr.disputed; edited = true; }
     if (ovr.excluded !== null) excluded = !!ovr.excluded;
   }
 
@@ -422,7 +452,6 @@ function rowToRecord(row: Row, loCodes: string[], ovr?: OverrideRow): McqRecord 
     answer,
     reason,
     urls: safeParseArray(row.urls),
-    disputed,
     parentCode: row.parent_code,
     // Corpus-supplied; deliberately outside the override layer so a user's
     // stem/answer edit never detaches the figure the stem refers to.
@@ -475,12 +504,11 @@ export interface McqQuery {
   domain?: string;
   paper?: string;      // matches any paper in the papers[] JSON
   q?: string;          // free-text search over stem
-  disputed?: boolean;
   completed?: boolean; // true = has ≥1 attempt, false = has none
   // "unmastered" = the review pool: questions never answered CORRECTLY, i.e.
   // never attempted OR attempted but every attempt was wrong. A question the
   // user got right (even after earlier misses) is considered mastered and is
-  // excluded. Combines with completed/disputed via AND.
+  // excluded. Combines with completed via AND.
   unmastered?: boolean;
   limit?: number;
   offset?: number;
@@ -497,8 +525,8 @@ export function listMcqs(query: McqQuery = {}): { total: number; items: McqRecor
   // Discarded questions leave EVERY read of the bank together: the stats
   // (getMcqStats), the study pools (NOT_DISCARDED_SQL) — and this list. The
   // list used to keep them, so the header said "1706 total" over a pager
-  // reading "of 1707" and the discarded row rendered with no badge. They stay
-  // visible and reopenable on the Disputes page, which reads them directly.
+  // reading "of 1707" and the discarded row rendered with no badge. Revert to
+  // original on the MCQs page is the way back.
   const where: string[] = [
     "COALESCE((SELECT o.excluded FROM mcq_overrides o WHERE o.mcq_id = m.id), 0) = 0",
   ];
@@ -528,23 +556,6 @@ export function listMcqs(query: McqQuery = {}): { total: number; items: McqRecor
     )`);
     const like = `%${query.q.toLowerCase()}%`;
     params.push(like, like);
-  }
-  if (typeof query.disputed === "boolean") {
-    // ONE definition of "disputed", imported rather than retyped: the same
-    // string getMcqStats, the per-paper counts, the triage queue and the study
-    // pool's excludeDisputed all run. The raw base column froze triage verdicts
-    // and user-raised disputes out of this filter; that repair held here, but it
-    // was made three times by hand in this file alone, and the constant is what
-    // stops the NEXT one reaching some of the copies and not the rest.
-    // Still ANDed with not-discarded here — a discarded question is
-    // out of the bank whatever its dispute says — and still compared to the
-    // bound flag so `disputed: false` means "effectively undisputed AND
-    // listable", not merely "not disputed".
-    where.push(`(
-      ${DISPUTED_SQL_M}
-      AND COALESCE((SELECT o.excluded FROM mcq_overrides o WHERE o.mcq_id = m.id), 0) = 0
-    ) = ?`);
-    params.push(query.disputed ? 1 : 0);
   }
   if (typeof query.completed === "boolean") {
     // "Completed" = has at least one submitted answer. Skipped attempts
@@ -602,7 +613,7 @@ export function getMcqMap(): Map<string, McqRecord> {
   }
   const ovrMap = new Map<string, OverrideRow>();
   for (const r of sqlite.prepare(
-    "SELECT mcq_id, stem, options, answer, reason, disputed, excluded FROM mcq_overrides",
+    "SELECT mcq_id, stem, options, answer, reason, excluded FROM mcq_overrides",
   ).all() as OverrideRow[]) ovrMap.set(r.mcq_id, r);
   const out = new Map<string, McqRecord>();
   for (const row of rows) out.set(row.id, rowToRecord(row, loMap.get(row.id) ?? [], ovrMap.get(row.id)));
@@ -616,7 +627,7 @@ export function getMcq(id: string): McqRecord | null {
     "SELECT lo_code FROM mcq_lo_links WHERE mcq_id = ? ORDER BY lo_code",
   ).all(id) as Array<{ lo_code: string }>;
   const ovr = sqlite.prepare(
-    "SELECT mcq_id, stem, options, answer, reason, disputed, excluded FROM mcq_overrides WHERE mcq_id = ?",
+    "SELECT mcq_id, stem, options, answer, reason, excluded FROM mcq_overrides WHERE mcq_id = ?",
   ).get(id) as OverrideRow | undefined;
   return rowToRecord(row, los.map((l) => l.lo_code), ovr);
 }
@@ -641,7 +652,7 @@ export function getMcqsByLo(loCode: string): McqRecord[] {
  *
  * Correctness is a DERIVED fact (selected === key) that this table stores
  * denormalised at attempt time. That was harmless while keys never moved —
- * but dispute triage and hand edits exist precisely to change wrong keys, and
+ * but hand edits exist precisely to change wrong keys, and
  * every applied key change silently invalidated the stored verdict of every
  * earlier attempt. Two consequences, both silent:
  *   - an attempt recorded CORRECT under the old key keeps `correct = 1`, and
@@ -738,7 +749,6 @@ export interface McqEditInput {
   options?: { A: string; B: string; C: string; D: string; E: string };
   answer?: string | null;   // 'A'..'E', empty string, or null
   reason?: string;
-  disputed?: boolean;
   excluded?: boolean | null; // true = hide from study pools; null = clear the flag
 }
 
@@ -753,13 +763,12 @@ export function updateMcqOverride(id: string, edit: McqEditInput): McqRecord | n
   const beforeAnswer = getMcq(id)?.answer ?? null;
 
   const existing = sqlite.prepare(
-    "SELECT stem, options, answer, reason, disputed, excluded FROM mcq_overrides WHERE mcq_id = ?",
+    "SELECT stem, options, answer, reason, excluded FROM mcq_overrides WHERE mcq_id = ?",
   ).get(id) as {
     stem: string | null;
     options: string | null;
     answer: string | null;
     reason: string | null;
-    disputed: number | null;
     excluded: number | null;
   } | undefined;
 
@@ -768,31 +777,28 @@ export function updateMcqOverride(id: string, edit: McqEditInput): McqRecord | n
     options: existing?.options ?? null,
     answer: existing?.answer ?? null,
     reason: existing?.reason ?? null,
-    disputed: existing?.disputed ?? null,
     excluded: existing?.excluded ?? null,
   };
   if (edit.stem !== undefined) next.stem = edit.stem;
   if (edit.options !== undefined) next.options = JSON.stringify(edit.options);
   if (edit.answer !== undefined) next.answer = edit.answer === null ? "" : edit.answer;
   if (edit.reason !== undefined) next.reason = edit.reason;
-  if (edit.disputed !== undefined) next.disputed = edit.disputed ? 1 : 0;
   if (edit.excluded !== undefined) next.excluded = edit.excluded === null ? null : edit.excluded ? 1 : 0;
 
   sqlite.prepare(`
-    INSERT INTO mcq_overrides (mcq_id, stem, options, answer, reason, disputed, excluded, updated_at)
-    VALUES (@id, @stem, @options, @answer, @reason, @disputed, @excl, @now)
+    INSERT INTO mcq_overrides (mcq_id, stem, options, answer, reason, excluded, updated_at)
+    VALUES (@id, @stem, @options, @answer, @reason, @excl, @now)
     ON CONFLICT(mcq_id) DO UPDATE SET
       stem = @stem,
       options = @options,
       answer = @answer,
       reason = @reason,
-      disputed = @disputed,
       excluded = @excl,
       updated_at = @now
-  `).run({ id, stem: next.stem, options: next.options, answer: next.answer, reason: next.reason, disputed: next.disputed, excl: next.excluded, now: Date.now() });
+  `).run({ id, stem: next.stem, options: next.options, answer: next.answer, reason: next.reason, excl: next.excluded, now: Date.now() });
 
   const after = getMcq(id);
-  // The keyed answer moved (a triage fix or a hand edit) — every earlier
+  // The keyed answer moved (a hand edit) — every earlier
   // attempt's stored correctness now describes the OLD key, and any SRS
   // schedule was built from feedback given against it.
   if (after && (after.answer ?? null) !== beforeAnswer) {
@@ -800,112 +806,6 @@ export function updateMcqOverride(id: string, edit: McqEditInput): McqRecord | n
     resetSrsOnKeyChange(id);
   }
   return after;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Dispute triage — a workflow over the corpus's disputed questions.
-//
-// The base `disputed` flag comes from the Black Bank corpus and never changes;
-// resolution lives entirely in the override layer so a re-ingest can't undo
-// triage work. Status per base-disputed MCQ:
-//   discarded — override.excluded = 1 (hidden from study pools + SRS)
-//   fixed     — override.disputed = 0 AND any content field overridden
-//   accepted  — override.disputed = 0, content untouched
-//   pending   — everything else
-// -------------------------------------------------------------------------------------------------
-
-export type TriageStatus = "pending" | "accepted" | "fixed" | "discarded";
-
-function triageStatus(ovr: OverrideRow | undefined): TriageStatus {
-  if (!ovr) return "pending";
-  if (ovr.excluded === 1) return "discarded";
-  if (ovr.disputed === 0) {
-    const contentEdited = ovr.stem !== null || ovr.options !== null || ovr.answer !== null || ovr.reason !== null;
-    return contentEdited ? "fixed" : "accepted";
-  }
-  return "pending";
-}
-
-export function listDisputeTriage(): {
-  counts: Record<TriageStatus, number> & { total: number };
-  items: Array<McqRecord & { triageStatus: TriageStatus }>;
-} {
-  // The queue lists the EFFECTIVE dispute, not the base column. A dispute
-  // raised in the app (McqEditDialog's Disputed toggle -> PATCH /api/mcqs/:id
-  // -> updateMcqOverride) is written to `mcq_overrides` and never touches
-  // `mcqs.disputed`, so `WHERE disputed = 1` hid every user-raised flag from
-  // the one page that exists to clear it. Imported, not re-typed: this is the
-  // same string the list filter, the stats header, the paper picker and the
-  // study pool run, and the COALESCE inside it can never be NULL (mcqs.disputed
-  // is NOT NULL DEFAULT 0), so on its own it is the whole effective-dispute
-  // test — no base-column special case is needed alongside it.
-  //
-  // The second clause keeps a RESOLVED dispute listed: Accept/Fix write 0 over
-  // the effective flag and Discard writes `excluded = 1`, so without it every
-  // row would vanish from the queue the moment it was triaged and the accepted
-  // / fixed / discarded bands below would always read 0. It tests for a triage
-  // VERDICT, not merely an override row: a content-only edit leaves both
-  // columns NULL and is not a dispute, and `excluded = 0` ("not hidden", the
-  // shape a plain edit can leave) would otherwise fabricate a pending dispute
-  // and put counts.pending back out of step with the header count.
-  //
-  // The join is aliased `ovr`, not `o`: DISPUTED_SQL_M carries its own
-  // correlated subquery aliased `o`, and reusing that name here would leave a
-  // reader unsure which row the outer clauses read. mcq_overrides.mcq_id is
-  // the primary key, so the LEFT JOIN cannot fan one question into two rows.
-  const rows = sqlite.prepare(
-    `SELECT m.* FROM mcqs m
-     LEFT JOIN mcq_overrides ovr ON ovr.mcq_id = m.id
-     WHERE ${DISPUTED_SQL_M}
-        OR ovr.disputed IS NOT NULL
-        OR ovr.excluded = 1
-     ORDER BY m.topic_slug, CAST(SUBSTR(m.code, 3) AS INTEGER), m.code`,
-  ).all() as Row[];
-  const ids = rows.map((r) => r.id);
-  const loMap = getLoCodesFor(ids);
-  const ovrMap = getOverrideMap(ids);
-  const counts: Record<TriageStatus, number> & { total: number } = {
-    pending: 0, accepted: 0, fixed: 0, discarded: 0, total: rows.length,
-  };
-  const items = rows.map((r) => {
-    const ovr = ovrMap.get(r.id);
-    const status = triageStatus(ovr);
-    counts[status]++;
-    return { ...rowToRecord(r, loMap.get(r.id) ?? [], ovr), triageStatus: status };
-  });
-  return { counts, items };
-}
-
-export type TriageAction = "accept" | "fix" | "discard" | "reopen";
-
-/** Apply one triage decision. Returns the merged record + new status, or null
- *  if the MCQ doesn't exist. `edit` applies only to the `fix` action. */
-export function resolveMcqDispute(
-  id: string,
-  action: TriageAction,
-  edit?: Omit<McqEditInput, "disputed" | "excluded">,
-): (McqRecord & { triageStatus: TriageStatus }) | null {
-  const base = sqlite.prepare("SELECT id FROM mcqs WHERE id = ?").get(id) as { id: string } | undefined;
-  if (!base) return null;
-  if (action === "accept") {
-    updateMcqOverride(id, { disputed: false, excluded: null });
-  } else if (action === "fix") {
-    updateMcqOverride(id, { ...(edit ?? {}), disputed: false, excluded: null });
-  } else if (action === "discard") {
-    updateMcqOverride(id, { excluded: true });
-  } else {
-    // reopen: clear the triage verdict but KEEP any content edits — undoing a
-    // "fix" verdict shouldn't throw away the corrected answer text.
-    const existing = sqlite.prepare("SELECT mcq_id FROM mcq_overrides WHERE mcq_id = ?").get(id);
-    if (existing) {
-      sqlite.prepare("UPDATE mcq_overrides SET disputed = NULL, excluded = NULL, updated_at = ? WHERE mcq_id = ?").run(Date.now(), id);
-    }
-  }
-  const rec = getMcq(id)!;
-  const ovr = sqlite.prepare(
-    "SELECT mcq_id, stem, options, answer, reason, disputed, excluded FROM mcq_overrides WHERE mcq_id = ?",
-  ).get(id) as OverrideRow | undefined;
-  return { ...rec, triageStatus: triageStatus(ovr) };
 }
 
 /** Revert to the original by deleting the override row. Returns the base record. */
@@ -925,11 +825,10 @@ export function revertMcqOverride(id: string): McqRecord | null {
 export interface McqStats {
   total: number;
   withAnswer: number;
-  disputed: number;
   byTopic: Array<{ slug: string; name: string; domain: string; count: number; linked: number }>;
   // Distinct past-paper tags with their question counts, newest tag first.
   // Powers the "sit a real paper" picker on the Study page.
-  papers: Array<{ tag: string; count: number; sittable: number; sittableWithDisputed: number }>;
+  papers: Array<{ tag: string; count: number; sittable: number }>;
 }
 
 export function getMcqStats(): McqStats {
@@ -945,16 +844,6 @@ export function getMcqStats(): McqStats {
         AND CASE WHEN (SELECT o.answer FROM mcq_overrides o WHERE o.mcq_id = m.id) IS NOT NULL
                  THEN NULLIF((SELECT o.answer FROM mcq_overrides o WHERE o.mcq_id = m.id), '')
                  ELSE m.answer END IS NOT NULL`,
-  ).get() as { c: number }).c;
-  // Unresolved disputes only — triage verdicts (accept/fix/discard) live in
-  // the override layer and retire the dispute; a user-raised override dispute
-  // COUNTS. Literally the same string as the list filter, the triage queue and
-  // the study pool now run, so the header count and the list it links to cannot
-  // become two different questions.
-  const disputed = (sqlite.prepare(
-    `SELECT COUNT(*) as c FROM mcqs m
-      WHERE ${DISPUTED_SQL_M}
-        AND ${notDiscarded}`,
   ).get() as { c: number }).c;
   const byTopic = sqlite.prepare(`
     SELECT topic_slug as slug, topic_name as name, domain, COUNT(*) as count,
@@ -978,37 +867,26 @@ export function getMcqStats(): McqStats {
     return year * 100 + (mon >= 0 ? mon : 0);
   };
   // Per paper: the corpus count AND what a session can actually serve — the
-  // pool predicate (effective answer, not discarded, optionally not disputed)
-  // trims most papers, and "Sit a real paper" must promise the SITTABLE size,
-  // not the corpus size (Apr01 has 103 questions but serves 96 under the
-  // default exclude-disputed filter).
+  // pool predicate (effective answer, not discarded) trims most papers, and
+  // "Sit a real paper" must promise the SITTABLE size, not the corpus size
+  // (a paper with 103 questions serves fewer when some carry no key).
   const paperCounts = new Map<string, number>();
-  const paperSittable = new Map<string, number>();              // excl. disputed (default toggle)
-  const paperSittableWithDisputed = new Map<string, number>();  // disputed allowed
+  const paperSittable = new Map<string, number>();
   const paperRows = sqlite.prepare(`
     SELECT papers,
            (CASE WHEN (SELECT o.answer FROM mcq_overrides o WHERE o.mcq_id = m.id) IS NOT NULL
                  THEN NULLIF((SELECT o.answer FROM mcq_overrides o WHERE o.mcq_id = m.id), '')
-                 ELSE m.answer END IS NOT NULL) AS hasAnswer,
-           (${DISPUTED_SQL_M}) AS isDisputed
-      FROM mcqs m WHERE ${notDiscarded}`).all() as Array<{ papers: string; hasAnswer: number; isDisputed: number }>;
+                 ELSE m.answer END IS NOT NULL) AS hasAnswer
+      FROM mcqs m WHERE ${notDiscarded}`).all() as Array<{ papers: string; hasAnswer: number }>;
   for (const r of paperRows) {
     for (const tag of safeParseArray(r.papers)) {
       if (!canonical.test(tag) || MONTHS.indexOf(tag.slice(0, 3)) < 0) continue;
       paperCounts.set(tag, (paperCounts.get(tag) ?? 0) + 1);
-      if (r.hasAnswer) {
-        paperSittableWithDisputed.set(tag, (paperSittableWithDisputed.get(tag) ?? 0) + 1);
-        if (!r.isDisputed) paperSittable.set(tag, (paperSittable.get(tag) ?? 0) + 1);
-      }
+      if (r.hasAnswer) paperSittable.set(tag, (paperSittable.get(tag) ?? 0) + 1);
     }
   }
   const papers = Array.from(paperCounts.entries())
-    .map(([tag, count]) => ({
-      tag,
-      count,
-      sittable: paperSittable.get(tag) ?? 0,
-      sittableWithDisputed: paperSittableWithDisputed.get(tag) ?? 0,
-    }))
+    .map(([tag, count]) => ({ tag, count, sittable: paperSittable.get(tag) ?? 0 }))
     .sort((a, b) => paperSortKey(b.tag) - paperSortKey(a.tag));
-  return { total, withAnswer, disputed, byTopic, papers };
+  return { total, withAnswer, byTopic, papers };
 }

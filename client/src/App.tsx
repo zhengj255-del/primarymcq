@@ -9,15 +9,13 @@ import { useEffect, useState, useRef, Component, type ReactNode } from "react";
 import NotFound from "@/pages/not-found";
 import StudyPage from "@/pages/Study";
 import MCQsPage from "@/pages/MCQs";
-import DisputesPage from "@/pages/Disputes";
 import SettingsPage from "@/pages/Settings";
-import { Brain, FileQuestion, Scale, Settings as SettingsIcon, RefreshCw, Check, AlertCircle } from "lucide-react";
+import { Brain, FileQuestion, Settings as SettingsIcon, RefreshCw, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const NAV: Array<{ href: string; label: string; icon: any; testId: string }> = [
   { href: "/", label: "Study", icon: Brain, testId: "link-study" },
   { href: "/mcqs", label: "MCQs", icon: FileQuestion, testId: "link-mcqs" },
-  { href: "/disputes", label: "Disputes", icon: Scale, testId: "link-disputes" },
   { href: "/settings", label: "Settings", icon: SettingsIcon, testId: "link-settings" },
 ];
 
@@ -269,7 +267,6 @@ export function AppRouter() {
       <Route path="/" component={StudyPage} />
       <Route path="/study" component={StudyPage} />
       <Route path="/mcqs" component={MCQsPage} />
-      <Route path="/disputes" component={DisputesPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>

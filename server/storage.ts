@@ -171,7 +171,7 @@ bootstrap();
 // so by the time bootstrapMcqs() is called, sqlite is fully initialised.
 bootstrapMcqs();
 // Attempt correctness is stored denormalised but DERIVED from the key, and a
-// triage fix or a hand edit changes keys. Re-derive any row left disagreeing
+// hand edit changes keys. Re-derive any row left disagreeing
 // with its current key by a key change that predates regradeAttempts().
 try {
   const regraded = reconcileAttemptCorrectness();

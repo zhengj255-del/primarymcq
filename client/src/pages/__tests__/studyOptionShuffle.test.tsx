@@ -20,7 +20,7 @@ const OPTS = { A: "alpha", B: "bravo", C: "charlie", D: "delta", E: "echo" };
 const MCQ = (id: string, options: Record<string, string>) => ({
   id, code: id, displayCode: id, topicFile: "t", topicName: "Topic", topicSlug: "t",
   domain: "physiology", section: null, papers: [], stem: `${id} stem`,
-  options, answer: "A", reason: "because", urls: [], disputed: false, parentCode: null,
+  options, answer: "A", reason: "because", urls: [], parentCode: null,
   loCodes: [], edited: false,
 });
 

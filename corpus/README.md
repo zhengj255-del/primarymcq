@@ -27,7 +27,7 @@ The recallers wrote down the questions, not the answers: 255 of the 513 arrived 
 
 > Answer and explanation supplied by the tracker's GPT audit (gpt-5.6-sol, prescribed-text grounded), 2026-09-07 — not examiner-verified.
 
-**No examiner has confirmed any of these answers**, and nor has a human. Treat them as a study aid, not as a mark scheme — the wording above is deliberately on every affected question so nobody mistakes one for the other while sitting it. Where the adjudication could not settle a question, the record is left `disputed: true` and lands on the Disputes page rather than being served with a key nobody trusts.
+**No examiner has confirmed any of these answers**, and nor has a human. Treat them as a study aid, not as a mark scheme — the wording above is deliberately on every affected question so nobody mistakes one for the other while sitting it. Where the adjudication could not settle a question, the record is left `disputed: true`. The tracker parks those; **this site does not** — it has no Disputes page and ignores the field, so such a question is served like any other (see the root README's *No disputes*). The field stays in the file so the same corpus still drops into the tracker unchanged.
 
 The audit also repaired question text where the recall was incomplete: 78 stems and 56 option sets. In 16 of those the option set gained choices the recallers had not captured, which means those distractors are the adjudicator's own writing rather than the paper's.
 

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Loader2, RotateCcw } from "lucide-react";
 
 // -----------------------------------------------------------------------------
@@ -23,20 +22,15 @@ interface McqEditDialogProps {
   onOpenChange: (v: boolean) => void;
   onSaved?: (updated: McqRecord) => void; // optional callback (e.g. Study runner refresh)
   // Fires on Revert-to-original instead of onSaved. Defaults to onSaved when
-  // unset — Disputes and Study legitimately treat a revert like any other
-  // content change; a caller that must tell the two apart passes both.
+  // unset — Study legitimately treats a revert like any other content change;
+  // a caller that must tell the two apart passes both.
   onReverted?: (reverted: McqRecord) => void;
-  // When opened from dispute triage, seed the Disputed toggle OFF so a normal
-  // correct-and-save clears the dispute (advancing the item to "fixed").
-  // Without this the toggle defaults to the card's current disputed=true and
-  // the item would stay pending forever.
-  resolveDisputeOnSave?: boolean;
 }
 
 const OPTION_KEYS = ["A", "B", "C", "D", "E"] as const;
 type OptKey = (typeof OPTION_KEYS)[number];
 
-export function McqEditDialog({ mcq, open, onOpenChange, onSaved, onReverted, resolveDisputeOnSave }: McqEditDialogProps) {
+export function McqEditDialog({ mcq, open, onOpenChange, onSaved, onReverted }: McqEditDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -46,7 +40,6 @@ export function McqEditDialog({ mcq, open, onOpenChange, onSaved, onReverted, re
   const [options, setOptions] = useState<Record<OptKey, string>>({ ...mcq.options });
   const [answer, setAnswer] = useState<string>(mcq.answer ?? "__clear__");
   const [reason, setReason] = useState(mcq.reason ?? "");
-  const [disputed, setDisputed] = useState<boolean>(resolveDisputeOnSave ? false : mcq.disputed);
 
   useEffect(() => {
     if (open) {
@@ -54,7 +47,6 @@ export function McqEditDialog({ mcq, open, onOpenChange, onSaved, onReverted, re
       setOptions({ ...mcq.options });
       setAnswer(mcq.answer ?? "__clear__");
       setReason(mcq.reason ?? "");
-      setDisputed(resolveDisputeOnSave ? false : mcq.disputed);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mcq]);
@@ -65,10 +57,6 @@ export function McqEditDialog({ mcq, open, onOpenChange, onSaved, onReverted, re
     queryClient.invalidateQueries({ queryKey: ["/api/mcqs/stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/mcqs/user-stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/mcqs/weak-areas"] });
-    // The triage queue keys on its own single string — the "/api/mcqs" prefix
-    // above does NOT match it. Without this, resolving a dispute from the
-    // MCQs page or Study runner left the Disputes "Pending N" stale all session.
-    queryClient.invalidateQueries({ queryKey: ["/api/mcqs/triage"] });
   };
 
   const saveMutation = useMutation({
@@ -82,7 +70,6 @@ export function McqEditDialog({ mcq, open, onOpenChange, onSaved, onReverted, re
       const baseAnswer = mcq.answer ?? "";
       if (nextAnswer !== baseAnswer) body.answer = nextAnswer;
       if (reason !== (mcq.reason ?? "")) body.reason = reason;
-      if (disputed !== mcq.disputed) body.disputed = disputed;
 
       if (Object.keys(body).length === 0) {
         return null; // no-op
@@ -181,20 +168,6 @@ export function McqEditDialog({ mcq, open, onOpenChange, onSaved, onReverted, re
                   <SelectItem value="__clear__">(no answer)</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-disputed" className="block">Disputed</Label>
-              <div className="flex items-center gap-2 pt-2">
-                <Switch
-                  id="edit-disputed"
-                  checked={disputed}
-                  onCheckedChange={setDisputed}
-                  data-testid="switch-edit-disputed"
-                />
-                <span className="text-sm text-muted-foreground">
-                  {disputed ? "Flagged as disputed" : "Not disputed"}
-                </span>
-              </div>
             </div>
           </div>
 

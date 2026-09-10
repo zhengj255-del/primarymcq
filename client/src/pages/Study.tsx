@@ -58,10 +58,8 @@ interface AttemptResp {
   srsPreview?: { again: number; hard: number; good: number; easy: number };
 }
 interface McqStats {
-  total: number; withAnswer: number; disputed: number;
+  total: number; withAnswer: number;
   byTopic: Array<{ slug: string; name: string; domain: string; count: number; linked: number }>;
-  // (The API also returns sittableWithDisputed; unused since the
-  // exclude-disputed toggle was removed — disputed is always excluded.)
   papers: Array<{ tag: string; count: number; sittable?: number }>;
 }
 
@@ -339,9 +337,6 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
     if (topics.size > 0) q.set("topics", Array.from(topics).join(","));
     if (domains.size > 0) q.set("domains", Array.from(domains).join(","));
     if (loCodesParsed?.length) q.set("loCodes", loCodesParsed.join(","));
-    // Disputed questions are ALWAYS excluded from study pools (the old toggle
-    // is gone) — they re-enter by being resolved on the Disputes page.
-    q.set("excludeDisputed", "1");
     // The panel's numbers must be the numbers Study will serve — the no-new
     // toggle changes both through the same flag.
     if (skipNew) q.set("skipNew", "1");
@@ -384,7 +379,6 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
         topics: topics.size > 0 ? Array.from(topics) : undefined,
         domains: domains.size > 0 ? Array.from(domains) : undefined,
         loCodes: loCodesParsed,
-        excludeDisputed: true,
         completion: srs || completion === "all" ? undefined : completion,
         srsSkipNew: (srs && skipNew) || undefined,
         weakAreas: (!srs && weakAreas) || undefined,
@@ -513,9 +507,7 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
 
         <Separator />
 
-        {/* Toggles. (The exclude-disputed switch is gone: disputed questions
-            are simply never served — resolving them on the Disputes page
-            brings them back — so the choice it offered was clutter.) */}
+        {/* Toggles. */}
         {!srs && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="flex items-center gap-2.5 cursor-pointer" data-testid="toggle-weak-areas">
@@ -583,10 +575,10 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
               setPaper(v);
               if (v !== "all") {
                 const p = statsQ.data?.papers.find((x) => x.tag === v);
-                // Sit what the pool can actually SERVE (disputed always
-                // excluded) — requesting the corpus count silently delivered
-                // fewer ("the full paper" served 96 of 103) and the sitting
-                // was scored out of the smaller number.
+                // Sit what the pool can actually SERVE — requesting the
+                // corpus count silently delivered fewer ("the full paper"
+                // served 96 of 103) and the sitting was scored out of the
+                // smaller number.
                 if (p) setCount(Math.min(200, p.sittable ?? p.count));
               }
             }}
@@ -610,7 +602,7 @@ function FilterBuilder({ mode, onStart }: { mode: Mode; onStart: (s: StartResp) 
                 const sittable = p.sittable ?? p.count;
                 const gap = p.count - sittable;
                 const gapNote = gap > 0
-                  ? ` · sits ${sittable} of its ${p.count} Qs (${gap} disputed/unanswerable excluded)`
+                  ? ` · sits ${sittable} of its ${p.count} Qs (${gap} unanswerable excluded)`
                   : "";
                 const capNote = sittable > 200 ? ` · capped at 200 randomly-drawn of its ${sittable} sittable Qs` : "";
                 return `${gapNote}${capNote}`;
@@ -1078,11 +1070,6 @@ function SessionRunner({ session, onFinish, resume }: { session: StartResp; onFi
           <div className="flex items-center gap-2 flex-wrap">
             <SittingTag code={mcq.code} papers={mcq.papers} className="text-[10px]" testId="badge-mcq-sitting" />
             <Badge variant="outline" className="text-[10px]">{mcq.topicName}</Badge>
-            {mcq.disputed && (
-              <Badge variant="destructive" className="text-[10px] gap-1">
-                <AlertCircle className="h-2.5 w-2.5" /> Disputed
-              </Badge>
-            )}
             {mcq.edited && (
               <Badge variant="secondary" className="text-[10px] gap-1" data-testid="badge-mcq-edited">
                 <Pencil className="h-2.5 w-2.5" /> Edited

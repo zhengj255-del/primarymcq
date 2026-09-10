@@ -52,7 +52,7 @@ describe("MCQ dueToday ends at Melbourne midnight", () => {
     // pools' sittable predicate, so a synthetic id would (correctly) never
     // count — this test is about the DAY BOUNDARY, not sittability.
     const ids = sqlite.prepare(
-      "SELECT id FROM mcqs WHERE answer IS NOT NULL AND disputed = 0 LIMIT 2",
+      "SELECT id FROM mcqs WHERE answer IS NOT NULL LIMIT 2",
     ).all() as Array<{ id: string }>;
     const ins = sqlite.prepare(
       "INSERT INTO mcq_srs_state (mcq_id, ease_factor, interval_days, reps, lapses, last_reviewed_at, due_at) VALUES (?, 2.5, 1, 1, 0, ?, ?)",
