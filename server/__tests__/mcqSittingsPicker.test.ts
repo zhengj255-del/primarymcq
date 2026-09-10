@@ -159,3 +159,74 @@ describe("sitting a paper actually serves that paper", () => {
     expect(all.mcqs.length).toBe(50);
   });
 });
+
+// ---------------------------------------------------------------------------
+// THE PAGE'S OWN DESCRIPTION OF THE BANK.
+//
+// The MCQs page called itself "Kerry Brandis Black Bank — physiology past
+// questions". Three claims, all false by the time anyone read them: the Black
+// Bank is 1,586 of 2,366 questions, pharmacology is within 40 of physiology,
+// and a third of the bank is neither. A subtitle is a claim about the data, so
+// it gets held to the data like any other.
+// ---------------------------------------------------------------------------
+describe("what the page says the bank is", () => {
+  const slugOf = (f: string) => f.replace(/^MCQ-/, "").replace(/\.txt$/, "").toLowerCase();
+  const PHYSIOLOGY = new Set(["acid-base", "cardiovascular", "cellular-metabolic-endocrine",
+    "fluids-electrolytes", "gastrointestinal", "haematology-immune-system", "maternal-foetal",
+    "neurophysiology-pain", "renal", "respiratory", "thermoregulation"]);
+  const PHARMACOLOGY = new Set(["cardiovascular-pharmacology", "general-pharmacology",
+    "inhalational-anaesthetics", "intravenous-anaesthetics", "local-anaesthetics",
+    "miscellaneous-pharmacology", "muscle-relaxants-reversal-agents", "opioids", "pain-management"]);
+
+  const corpus = () => JSON.parse(
+    require("node:fs").readFileSync(
+      require("node:path").resolve(import.meta.dirname, "../data/mcqs.json"), "utf-8"),
+  ) as Array<{ code: string; topicFile: string; section: string | null; answer: string | null; reason: string }>;
+
+  it("is not a physiology bank, so the subtitle must not claim to be one", () => {
+    const all = corpus();
+    const phys = all.filter((q) => PHYSIOLOGY.has(slugOf(q.topicFile))).length;
+    const pharm = all.filter((q) => PHARMACOLOGY.has(slugOf(q.topicFile))).length;
+    const other = all.length - phys - pharm;
+    // Pharmacology is not a rounding error beside physiology, and a tenth of the
+    // bank is neither.
+    expect(pharm).toBeGreaterThan(all.length * 0.4);
+    expect(other).toBeGreaterThan(all.length * 0.05);
+    const src = require("node:fs").readFileSync(
+      require("node:path").resolve(import.meta.dirname, "../../client/src/pages/MCQs.tsx"), "utf-8");
+    const subtitle = /text-sm text-muted-foreground">([\s\S]*?)<\/p>/.exec(src)?.[1] ?? "";
+    expect(subtitle, "the MCQs subtitle moved — update this guard").toBeTruthy();
+    for (const word of ["physiology", "pharmacology"]) {
+      expect(subtitle.toLowerCase(), `the subtitle does not mention ${word}`).toContain(word);
+    }
+  });
+
+  it("is not the Black Bank alone, so the subtitle must name the rest", () => {
+    const all = corpus();
+    const recalls = all.filter((q) => /RECALL/.test(q.section ?? "")).length;
+    const official = all.filter((q) => /^OFF-/.test(q.code)).length;
+    expect(recalls).toBeGreaterThan(500);
+    expect(official).toBeGreaterThan(100);
+    const src = require("node:fs").readFileSync(
+      require("node:path").resolve(import.meta.dirname, "../../client/src/pages/MCQs.tsx"), "utf-8");
+    const subtitle = /text-sm text-muted-foreground">([\s\S]*?)<\/p>/.exec(src)?.[1] ?? "";
+    expect(subtitle.toLowerCase()).toContain("recall");
+    expect(subtitle).toMatch(/2018/);
+  });
+
+  it("does not hard-code the question count, which a refresh would falsify", () => {
+    const src = require("node:fs").readFileSync(
+      require("node:path").resolve(import.meta.dirname, "../../client/src/pages/MCQs.tsx"), "utf-8");
+    const subtitle = /text-sm text-muted-foreground">([\s\S]*?)<\/p>/.exec(src)?.[1] ?? "";
+    // The rendered sentence must take its total from the stats, not a literal.
+    expect(subtitle).toContain("statsQuery.data.total");
+    const rendered = subtitle.replace(/\{\/\*[\s\S]*?\*\/\}/g, "");   // strip the explanatory comment
+    // Years are fine and necessary ("the released 2018 paper", "the 2025-2026 recalls"); a COUNT is not.
+    // Ban the comma-grouped form and the corpus's actual size in either spelling.
+    const total = corpus().length;
+    expect(rendered, "a comma-grouped literal in the subtitle goes stale on the next refresh")
+      .not.toMatch(/\b\d{1,3},\d{3}\b/);
+    expect(rendered, `the subtitle hard-codes the corpus size (${total})`)
+      .not.toContain(String(total));
+  });
+});
