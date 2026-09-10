@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, AlertCircle, ExternalLink, ChevronLeft, ChevronRight, CheckCircle2, Loader2, Pencil } from "lucide-react";
+import { Search, ExternalLink, ChevronLeft, ChevronRight, CheckCircle2, Loader2, Pencil } from "lucide-react";
 import { McqFigure } from "@/components/McqFigure";
 import type { McqRecord } from "@shared/schema";
 import { McqEditDialog } from "@/components/McqEditDialog";
@@ -23,7 +23,6 @@ interface McqListResp {
 interface McqStats {
   total: number;
   withAnswer: number;
-  disputed: number;
   byTopic: Array<{ slug: string; name: string; domain: string; count: number; linked: number }>;
 }
 
@@ -43,11 +42,6 @@ function McqDetail({ mcq, onClose }: { mcq: McqRecord; onClose: () => void }) {
             <div className="flex items-center gap-2 flex-wrap">
               <SittingTag code={mcq.code} papers={mcq.papers} className="text-xs" testId="badge-mcq-sitting" />
               <Badge variant="outline" className="text-xs max-w-full whitespace-normal">{mcq.topicName}</Badge>
-              {mcq.disputed && (
-                <Badge variant="destructive" className="text-xs gap-1">
-                  <AlertCircle className="h-3 w-3" /> Disputed
-                </Badge>
-              )}
               {mcq.edited && (
                 <Badge variant="secondary" className="text-xs gap-1" data-testid="badge-mcq-edited">
                   <Pencil className="h-3 w-3" /> Edited
@@ -191,12 +185,6 @@ function McqRow({
             lives in the detail panel, not here. */}
         <SittingTag code={mcq.code} papers={mcq.papers} className="text-[10px]" testId={`badge-sitting-${mcq.id}`} />
         <Badge variant="outline" className="text-[10px]">{mcq.topicName}</Badge>
-        {mcq.disputed && (
-          <Badge variant="destructive" className="text-[10px] gap-0.5 py-0 px-1.5">
-            <AlertCircle className="h-2.5 w-2.5" />
-            disputed
-          </Badge>
-        )}
         {mcq.edited && (
           <Badge variant="secondary" className="text-[10px] gap-0.5 py-0 px-1.5" data-testid={`badge-edited-${mcq.id}`}>
             <Pencil className="h-2.5 w-2.5" />
@@ -219,7 +207,6 @@ export default function MCQsPage() {
   const [topic, setTopic] = useState<string>("");
   const [q, setQ] = useState<string>("");
   const [qDebounced, setQDebounced] = useState<string>("");
-  const [disputedOnly, setDisputedOnly] = useState<boolean>(false);
   const [completion, setCompletion] = useState<"all" | "completed" | "not-completed" | "review">("all");
   const [page, setPage] = useState<number>(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -242,7 +229,6 @@ export default function MCQsPage() {
   const params = new URLSearchParams();
   if (topic) params.set("topic", topic);
   if (qDebounced) params.set("q", qDebounced);
-  if (disputedOnly) params.set("disputed", "true");
   if (completion === "completed") params.set("completed", "true");
   else if (completion === "not-completed") params.set("completed", "false");
   // "Review pool" = not yet answered correctly: unseen questions + ones
@@ -286,7 +272,6 @@ export default function MCQsPage() {
           <div className="flex gap-3 text-xs text-muted-foreground" data-testid="text-mcq-stats">
             <span><span className="font-mono font-semibold text-foreground">{statsQuery.data.total}</span> total</span>
             <span><span className="font-mono font-semibold text-foreground">{statsQuery.data.withAnswer}</span> with answers</span>
-            <span><span className="font-mono font-semibold text-foreground">{statsQuery.data.disputed}</span> disputed</span>
           </div>
         )}
       </div>
@@ -316,15 +301,6 @@ export default function MCQsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button
-          variant={disputedOnly ? "default" : "outline"}
-          size="sm"
-          onClick={() => { setDisputedOnly((v) => !v); setPage(0); }}
-          data-testid="button-toggle-disputed"
-        >
-          <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
-          Disputed only
-        </Button>
         <Select value={completion} onValueChange={(v) => { setCompletion(v as typeof completion); setPage(0); }}>
           <SelectTrigger className="w-[230px]" data-testid="select-completion">
             <SelectValue />
@@ -336,11 +312,11 @@ export default function MCQsPage() {
             <SelectItem value="review">Review pool (unseen + incorrect)</SelectItem>
           </SelectContent>
         </Select>
-        {(topic || qDebounced || disputedOnly || completion !== "all") && (
+        {(topic || qDebounced || completion !== "all") && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { setTopic(""); setQ(""); setQDebounced(""); setDisputedOnly(false); setCompletion("all"); setPage(0); }}
+            onClick={() => { setTopic(""); setQ(""); setQDebounced(""); setCompletion("all"); setPage(0); }}
             data-testid="button-clear-filters"
           >
             Clear
@@ -365,8 +341,8 @@ export default function MCQsPage() {
           {!listQuery.isLoading && !listQuery.isError && items.length === 0 && (
             <div className="text-center py-12 text-muted-foreground text-sm" data-testid="text-empty-state">
               {total > 0 && page > 0
-                // The total shrank underneath an open page (e.g. a concurrent
-                // triage discard): matches exist on earlier pages, so saying
+                // The total shrank underneath an open page (e.g. a question
+                // discarded elsewhere): matches exist on earlier pages, so saying
                 // "no MCQs match" would be a lie. Offer the way back instead.
                 ? <>This page is now empty — {total} match{total === 1 ? "es" : ""} on earlier pages. <button className="underline underline-offset-2" onClick={() => setPage(0)} data-testid="button-back-to-first-page">Back to page 1</button></>
                 : "No MCQs match those filters."}

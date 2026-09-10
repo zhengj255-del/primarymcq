@@ -5,7 +5,7 @@ import { updateMcqOverride, revertMcqOverride, reconcileAttemptCorrectness, getM
 import { submitAttempt, rateSrsAttempt } from "../mcqStudy";
 
 // ---------------------------------------------------------------------------
-// A keyed answer that MOVES (a triage fix, a hand edit, a revert) invalidates
+// A keyed answer that MOVES (a hand edit, a revert) invalidates
 // two things at once: every stored attempt's correctness, which was graded
 // against the old key, and the SRS schedule, which was built from feedback
 // given against it. mcqs.ts repairs both — regradeAttempts() for the log,
@@ -34,7 +34,7 @@ beforeEach(() => {
   sqlite.prepare("DELETE FROM mcq_srs_state").run();
   sqlite.prepare("DELETE FROM mcq_srs_undo").run();
   sqlite.prepare("DELETE FROM mcq_overrides").run();
-  id = (sqlite.prepare("SELECT id FROM mcqs WHERE answer IS NOT NULL AND disputed = 0 ORDER BY id LIMIT 1").get() as { id: string }).id;
+  id = (sqlite.prepare("SELECT id FROM mcqs WHERE answer IS NOT NULL ORDER BY id LIMIT 1").get() as { id: string }).id;
 });
 
 /** One correct SRS attempt rated Good (so a real schedule exists), one wrong

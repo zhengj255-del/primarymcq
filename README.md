@@ -9,8 +9,7 @@ It deliberately has **no AI** features, **no Anki integration** and none of the 
 | Page | Route | What it does |
 |---|---|---|
 | Study | `#/` (also `#/study`) | Pick a mode, scope the questions (topics, domains, past papers, learning objectives, completion state, weak areas), sit them. A sitting survives a reload; option order is shuffled per sitting. Below the picker: coverage, streak, per-topic accuracy, recent sessions. |
-| MCQs | `#/mcqs` | Browse and search the corpus; filter by topic, paper, disputed, completed; open a question; edit it (stem, options, answer, reason) or revert an edit. |
-| Disputes | `#/disputes` | The corpus flags some answer keys as disputed. Disputed questions never enter a study session until they are accepted as-is, fixed (edited) or discarded here. |
+| MCQs | `#/mcqs` | Browse and search the corpus; filter by topic, paper, completed; open a question; edit it (stem, options, answer, reason) or revert an edit. |
 | Settings | `#/settings` | Spaced-repetition parameters, reset progress, sign out. |
 
 Study modes:
@@ -118,7 +117,7 @@ JSON throughout. The first five routes are open; everything else needs the sessi
 | POST | `/api/logout` | destroys the session |
 | GET | `/api/settings` | `Settings` |
 | PATCH | `/api/settings` | partial `{srsRetention, srsFuzz, srsNewPerDay, srsMaxReviewsPerDay}` → `Settings`; 400 `{error}` on a bad field |
-| GET | `/api/mcqs` | query `topic, domain, paper, q, disputed, completed, unmastered, limit, offset` → `{total, items}` |
+| GET | `/api/mcqs` | query `topic, domain, paper, q, completed, unmastered, limit, offset` → `{total, items}` |
 | GET | `/api/mcqs/stats` | corpus totals, per-topic counts, per-paper sittable counts |
 | GET | `/api/mcqs/by-lo/:code` | `{code, items}` — questions linked to a learning objective |
 | POST | `/api/mcqs/session` | session filters (`mode: test\|tutor\|srs`, scope, `count`, `timeLimitSec`) → `{sessionId, mode, mcqs, timeLimitSec}` |
@@ -131,12 +130,12 @@ JSON throughout. The first five routes are open; everything else needs the sessi
 | GET | `/api/mcqs/srs/due?limit` | `{items}` |
 | POST | `/api/mcqs/srs/undo` | undo the last rating; 404 when there is nothing to undo |
 | POST / DELETE | `/api/mcqs/srs/extra-new` | `{count}` adds to today's new allowance; DELETE clears it → `{day, extraNew}` |
-| GET | `/api/mcqs/srs/queue-stats?topics=&domains=&loCodes=&skipNew=1` | lane counts for the scope (disputed questions always excluded) |
+| GET | `/api/mcqs/srs/queue-stats?topics=&domains=&loCodes=&skipNew=1` | lane counts for the scope |
 | GET | `/api/mcqs/weak-areas` | `{items}` — lowest-accuracy topics |
 | GET | `/api/mcqs/triage` | `{counts: {pending, accepted, fixed, discarded, total}, items}` |
 | POST | `/api/mcqs/:id/triage` | `{action: accept\|fix\|discard\|reopen, edit?}` → the question with `triageStatus` |
 | GET | `/api/mcqs/:id` | one question; 404 |
-| PATCH | `/api/mcqs/:id` | edit (override) stem / options / answer / reason / disputed |
+| PATCH | `/api/mcqs/:id` | edit (override) stem / options / answer / reason |
 | DELETE | `/api/mcqs/:id/override` | revert to the corpus text |
 | GET | `/api/export` | the JSON backup (attachment `mcq-backup-<date>.json`) |
 | POST | `/api/import?confirm=YES` | body = an export → `{ok, restored: {table: rows}}`; 400 without `confirm=YES` or on a file that is not this app's export |
@@ -145,21 +144,37 @@ Types for the request and response shapes are in `shared/schema.ts`.
 
 ## The corpus
 
-`server/data/mcqs.json` is the tracker's question bank **with the tracker's curated answers folded in** — the Black Bank questions as its owner has corrected them, plus the recalled sittings in `corpus/additions-2025-2026-recalls.json` (513 questions from the 2025.1, 2026.1 and 2026.2 papers; see `corpus/README.md`). It is a copy, not a source: the tracker's database holds the answers, and its `MCQ recall bake` workflow writes them out as `corpus/primarymcq-corpus.json` in the tracker's repository. To refresh, copy that file over this repository's `server/data/mcqs.json`, run `node corpus/apply-figure-explanations.mjs`, then `npm run check && npm test`, and push; the deploy workflow does the rest. That middle step is not optional: a few questions point at a plate the tracker does not have and their explanations are written against it, so a wholesale copy takes them out — `corpus/figure-explanations.json` holds them and the figure tests fail until they are back. At boot the server hashes the file; when the hash differs from the one stored in `mcq_meta` it wipes and re-ingests `mcqs` and `mcq_lo_links` (learning-objective links are re-derived). Everything keyed by question id — edits in `mcq_overrides`, attempts, SRS state, sessions — is untouched, so progress survives a refresh as long as question ids stay stable; where a refresh changes the key of a question already attempted, the stored correctness of those attempts is re-derived against the new key at that boot. A question the tracker's owner has discarded stays in the file but arrives `disputed: true`, so it is parked on the Disputes page rather than served — dropping it would make the boot cleanup delete the attempts on its id. `client/public/mcq-figures/*.svg` are the figures some questions reference; copy new ones across too if the corpus gains any.
+`server/data/mcqs.json` is the tracker's question bank **with the tracker's curated answers folded in** — the Black Bank questions as its owner has corrected them, plus the recalled sittings in `corpus/additions-2025-2026-recalls.json` (513 questions from the 2025.1, 2026.1 and 2026.2 papers; see `corpus/README.md`). It is a copy, not a source: the tracker's database holds the answers, and its `MCQ recall bake` workflow writes them out as `corpus/primarymcq-corpus.json` in the tracker's repository. To refresh, copy that file over this repository's `server/data/mcqs.json`, run `node corpus/apply-figure-explanations.mjs`, then `npm run check && npm test`, and push; the deploy workflow does the rest. That middle step is not optional: a few questions point at a plate the tracker does not have and their explanations are written against it, so a wholesale copy takes them out — `corpus/figure-explanations.json` holds them and the figure tests fail until they are back. At boot the server hashes the file; when the hash differs from the one stored in `mcq_meta` it wipes and re-ingests `mcqs` and `mcq_lo_links` (learning-objective links are re-derived). Everything keyed by question id — edits in `mcq_overrides`, attempts, SRS state, sessions — is untouched, so progress survives a refresh as long as question ids stay stable; where a refresh changes the key of a question already attempted, the stored correctness of those attempts is re-derived against the new key at that boot. Records still carry a `disputed` field from the tracker; this app ignores it (see **No disputes** below) but it is left in the file so the same corpus still drops into the tracker unchanged. `client/public/mcq-figures/*.svg` are the figures some questions reference; copy new ones across too if the corpus gains any.
+
+### No disputes
+
+There is no Disputes page and no `disputed` flag. Until September 2026 the corpus could park a
+question — 79 of them on the last refresh — so that no study session would ever serve it, and the
+Disputes page was the only screen that could let one back in. That page is gone and so is the
+concept: **every question with a key is sittable**, and the bank the MCQs list shows is the bank a
+sitting draws from. A corpus record's `disputed` field is ignored at ingest.
+
+An existing database is migrated on the first boot after the change: `mcq_overrides.excluded` (the
+old "discard" verdict, which hid a question from the list *and* from every pool) and
+`mcq_overrides.disputed` are cleared once, and an override row left holding nothing else is
+deleted so the question reads as untouched. Content edits are not touched. The marker
+`disputes_retired` in `mcq_meta` stops it running twice; the columns themselves are left on the
+table. One consequence worth knowing: with triage gone, nothing in the app can hide a question
+from study any more.
 
 ## Layout
 
 ```
 .
   client/            React 18 + wouter + TanStack Query, Tailwind, shadcn components
-    src/pages/       Study, MCQs, Disputes, Settings, not-found
+    src/pages/       Study, MCQs, Settings, not-found
     public/          favicon, mcq-figures/
   server/            Express 5 + better-sqlite3
     index.ts         entry: logger, auth, body parsers, routes, backups, static/Vite, shutdown
     auth.ts          APP_PASSWORD gate and session cookie
     routes.ts        the API above, incl. export/import
     storage.ts       database open + schema bootstrap + settings
-    mcqs.ts          corpus ingest, queries, edits, dispute triage
+    mcqs.ts          corpus ingest, queries, edits
     mcqStudy.ts      sessions, attempts, FSRS-6 scheduling, lanes, undo, stats
     mcqSittable.ts   the single "may this question be served" predicate
     backups.ts       rolling on-volume copies

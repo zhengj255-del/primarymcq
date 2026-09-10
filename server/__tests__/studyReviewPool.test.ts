@@ -43,7 +43,6 @@ describe("study session — review pool completion filter", () => {
       topics: [topic],
       completion: "review",
       count: 200,
-      excludeDisputed: false,
     } as any);
     const ids = new Set(s.mcqs.map((m) => m.id));
     expect(ids.has(wrongId)).toBe(true);

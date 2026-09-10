@@ -18,7 +18,7 @@ const MCQ = (id: string, stem: string) => ({
   id, code: id, displayCode: id, topicFile: "t", topicName: "Topic", topicSlug: "t",
   domain: "physiology", section: null, papers: [], stem,
   options: { A: "a", B: "b", C: "c", D: "d", E: "e" },
-  answer: "A", reason: "because", urls: [], disputed: false, parentCode: null,
+  answer: "A", reason: "because", urls: [], parentCode: null,
   loCodes: [], edited: false,
 });
 
@@ -103,8 +103,8 @@ describe("SRS setup — spaced review, not a quiz builder", () => {
     expect(screen.queryByTestId("slider-count")).toBeNull();
     expect(screen.queryByTestId("toggle-weak-areas")).toBeNull();
     expect(screen.queryByTestId("select-paper")).toBeNull();
-    // The exclude-disputed toggle is gone in EVERY mode: disputed questions
-    // are always excluded and come back via the Disputes page.
+    // The exclude-disputed toggle went with the dispute concept itself
+    // (Sep 2026): every keyed, undiscarded question is now sittable.
     expect(screen.queryByTestId("toggle-exclude-disputed")).toBeNull();
 
     const user = userEvent.setup();

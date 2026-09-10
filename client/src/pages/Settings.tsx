@@ -235,8 +235,8 @@ export default function SettingsPage() {
             <div className="text-sm font-medium">Reset MCQ progress</div>
             <div className="text-xs text-muted-foreground">
               Wipes every MCQ attempt, study session and the whole SRS schedule — the scheduler restarts
-              from zero and every question arrives as new. The question bank, your edits and dispute
-              resolutions are untouched. This cannot be undone.
+              from zero and every question arrives as new. The question bank and your edits are
+              untouched. This cannot be undone.
             </div>
             {resetArmed ? (
               <div className="flex items-center gap-2">

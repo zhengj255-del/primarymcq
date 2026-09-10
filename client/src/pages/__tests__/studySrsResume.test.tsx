@@ -19,7 +19,7 @@ const MCQ = (id: string, stem: string) => ({
   id, code: id, displayCode: id, topicFile: "t", topicName: "Topic", topicSlug: "t",
   domain: "physiology", section: null, papers: [], stem,
   options: { A: "a", B: "b", C: "c", D: "d", E: "e" },
-  answer: "A", reason: "because", urls: [], disputed: false, parentCode: null,
+  answer: "A", reason: "because", urls: [], parentCode: null,
   loCodes: [], edited: false,
 });
 

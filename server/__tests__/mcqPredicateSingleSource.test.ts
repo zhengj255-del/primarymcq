@@ -1,90 +1,54 @@
 import "./testDb";
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { sqlite } from "../storage";
-import { DISPUTED_SQL_M, NOT_DISPUTED_SQL_M, WEAK_AREAS_SQL, SRS_SITTABLE_SQL } from "../mcqSittable";
-import { listMcqs, getMcqStats, listDisputeTriage, updateMcqOverride, getMcq } from "../mcqs";
-import { submitAttempt, getWeakAreas } from "../mcqStudy";
+import { WEAK_AREAS_SQL, SRS_SITTABLE_SQL, EFFECTIVE_ANSWER_SQL, NOT_DISCARDED_SQL } from "../mcqSittable";
+import { listMcqs, getMcqStats, updateMcqOverride } from "../mcqs";
+import { submitAttempt, getWeakAreas, startSession } from "../mcqStudy";
 
 // -------------------------------------------------------------------------------------------------
 // I-2 — ONE definition per question, pinned by AGREEMENT.
 //
 // Two predicates in this app answer questions that several surfaces ask
-// independently: "is this MCQ effectively disputed?" and "which topics is the
-// candidate weak in?". Each had grown extra hand-typed copies — the dispute
-// COALESCE had four (the list filter, the stats count, the per-paper flag and
-// the triage list). Every copy was CORRECT when written. That is exactly the
-// failure mode: a copy is not wrong on the day it is made, it is wrong on the
-// day somebody repairs the original and does not know the copy exists. This
-// app has already paid that bill — the SRS count that promised reviews the
-// queue refused to serve (mcq-engine-srs-study-1), and a weak-area copy that
-// ranked a topic revealed with "Don't know" as a 0 % drill
-// (mcq-engine-srs-study-2). Both were one surface repaired and another missed.
+// independently: "could a sitting serve this question?" and "which topics is
+// the candidate weak in?". Each had grown extra hand-typed copies. Every copy
+// was CORRECT when written. That is exactly the failure mode: a copy is not
+// wrong on the day it is made, it is wrong on the day somebody repairs the
+// original and does not know the copy exists. This app has already paid that
+// bill — the SRS count that promised reviews the queue refused to serve
+// (mcq-engine-srs-study-1), and a weak-area copy that ranked a topic revealed
+// with "Don't know" as a 0 % drill (mcq-engine-srs-study-2). Both were one
+// surface repaired and another missed.
 //
-// So this file asserts nothing about WHAT the predicates decide — the tests
-// beside it (mcqSittableDisputed, mcqTriageDisputes) own that. It asserts only
-// that every surface gives the SAME answer on one seed, and that each surface's
-// answer still matches the exported constant it is supposed to be running. It
-// is green before the de-duplication and green after: its job is to go RED the
-// day a fifth copy appears and drifts.
+// So this file asserts nothing about WHAT the predicates decide. It asserts
+// only that every surface gives the SAME answer on one seed, and that each
+// surface's answer still matches the exported constant it is supposed to be
+// running. Its job is to go RED the day a fresh copy appears and drifts.
 //
-// The escape (D2): none needed — there is no flag to turn this off, because
-// there is no legitimate state in which the triage list, the stats header, the
-// paper picker and the SRS queue should disagree about whether a given question
-// is disputed. If a surface ever NEEDS a different question (as
-// computeWeakTopicSlugs does — see the comment on it in mcqStudy.ts), it stops
-// being a copy of this predicate and is excluded from the comparison here, with
-// the reason written down at its definition.
+// The dispute half of this file went with the Disputes page (Sep 2026) —
+// nothing marks a question disputed any more. What replaces it is the
+// assertion below that NOTHING is held out: the sittable predicate is now
+// exactly "keyed and not discarded", and the bank the list shows is the bank
+// a sitting can serve.
 // -------------------------------------------------------------------------------------------------
 
-/** The reference answer: the shared constant, run directly. Every surface below
- *  must return this same set of ids. */
-function disputedIdsFromConstant(): string[] {
-  return (sqlite.prepare(
-    `SELECT m.id FROM mcqs m WHERE ${DISPUTED_SQL_M} ORDER BY m.id`,
-  ).all() as Array<{ id: string }>).map((r) => r.id);
-}
+const SITTABLE_M = `${EFFECTIVE_ANSWER_SQL} AND ${NOT_DISCARDED_SQL}`;
 
-function notDisputedCountFromConstant(): number {
-  return (sqlite.prepare(
-    `SELECT COUNT(*) c FROM mcqs m WHERE ${NOT_DISPUTED_SQL_M}`,
-  ).get() as { c: number }).c;
-}
+const sittableIdsFromConstant = () =>
+  (sqlite.prepare(`SELECT m.id FROM mcqs m WHERE ${SITTABLE_M} ORDER BY m.id`)
+    .all() as Array<{ id: string }>).map((r) => r.id);
 
-/** The list filter's answer (server/mcqs.ts listMcqs). Paged, because the list
- *  caps `limit` at 200 of its own accord and the shipped corpus carries ~247
- *  disputed questions — a single unpaged call would compare the first page
- *  against the whole corpus and fail for a reason that has nothing to do with
- *  the predicate. `total` is asserted against the page count as we go, so a
- *  filter whose COUNT and whose page disagreed would be caught here too. */
-function disputedIdsFromListFilter(): string[] {
+/** Every id the list filter will page through, unfiltered. */
+function allIdsFromListFilter(): string[] {
   const ids: string[] = [];
   let total = 0;
   for (let offset = 0; ; offset += 200) {
-    const page = listMcqs({ disputed: true, limit: 200, offset });
+    const page = listMcqs({ limit: 200, offset });
     total = page.total;
     ids.push(...page.items.map((m) => m.id));
     if (page.items.length < 200) break;
   }
   expect(ids.length).toBe(total);
   return ids.sort();
-}
-
-/** The triage queue's answer, restricted to rows it lists BECAUSE they are
- *  disputed. listDisputeTriage deliberately also keeps rows whose dispute has
- *  been resolved (so the accepted/fixed/discarded bands are not always 0), so
- *  the comparison is against its still-disputed rows only — that is the subset
- *  answering the same question the other surfaces ask. */
-function disputedIdsFromTriageQueue(): string[] {
-  return listDisputeTriage().items.filter((m) => m.disputed).map((m) => m.id).sort();
-}
-
-/** The SRS queue's answer, through the s-aliased form of the same predicate.
- *  Every id passed in is tracked and sittable apart from its dispute, so what
- *  survives SRS_SITTABLE_SQL is exactly "not disputed". */
-function notDisputedIdsFromSrsSittable(): string[] {
-  return (sqlite.prepare(
-    `SELECT s.mcq_id AS id FROM mcq_srs_state s WHERE ${SRS_SITTABLE_SQL} ORDER BY s.mcq_id`,
-  ).all() as Array<{ id: string }>).map((r) => r.id);
 }
 
 const PAST = Date.now() - 60 * 60 * 1000;
@@ -95,17 +59,12 @@ function trackDue(id: string): void {
   ).run(id, PAST, PAST, PAST);
 }
 
-// A canonical past-paper tag with at least three sittable questions: the
-// per-paper `sittable` count is one of the four surfaces, and it only moves for
-// questions that carry a canonical MonYY tag.
 let TAG: string;
-let OVR_ID: string;    // disputed ONLY through mcq_overrides (the app's Dispute switch)
-let BASE_ID: string;   // disputed ONLY on the base column (the shipped corpus)
-let CLEAN_ID: string;  // never disputed — the control
-let paperBefore: { count: number; sittable: number; sittableWithDisputed: number };
-let disputedBefore: number;
+let KEPT: string;      // an ordinary sittable question — the control
+let DISCARDED: string; // discarded by hand: the ONE way a question leaves the bank
+let paperBefore: { count: number; sittable: number };
 
-describe("every surface that answers 'is this MCQ disputed' answers from one predicate", () => {
+describe("nothing is held out of the bank except a hand discard", () => {
   beforeAll(() => {
     sqlite.prepare("DELETE FROM mcq_overrides").run();
     sqlite.prepare("DELETE FROM mcq_srs_state").run();
@@ -113,102 +72,66 @@ describe("every surface that answers 'is this MCQ disputed' answers from one pre
     const paper = getMcqStats().papers.find((p) => p.sittable >= 3);
     expect(paper, "corpus sanity: a canonical paper with >= 3 sittable questions").toBeTruthy();
     TAG = paper!.tag;
-
-    const ids = (sqlite.prepare(
-      `SELECT id FROM mcqs
-        WHERE answer IS NOT NULL AND disputed = 0 AND papers LIKE ?
-        ORDER BY id LIMIT 3`,
-    ).all(`%"${TAG}"%`) as Array<{ id: string }>).map((r) => r.id);
-    expect(ids.length, `corpus sanity: 3 answered, undisputed ${TAG} questions`).toBe(3);
-    [OVR_ID, BASE_ID, CLEAN_ID] = ids;
-
-    disputedBefore = getMcqStats().disputed;
     paperBefore = getMcqStats().papers.find((p) => p.tag === TAG)!;
 
-    // All three tracked and due: the SRS sittable count then differs from three
-    // only by the dispute predicate.
+    const ids = (sqlite.prepare(
+      `SELECT id FROM mcqs WHERE answer IS NOT NULL AND papers LIKE ? ORDER BY id LIMIT 2`,
+    ).all(`%"${TAG}"%`) as Array<{ id: string }>).map((r) => r.id);
+    expect(ids.length, `corpus sanity: 2 answered ${TAG} questions`).toBe(2);
+    [KEPT, DISCARDED] = ids;
     for (const id of ids) trackDue(id);
-
-    // The two halves of "effectively disputed", one each, so a surface reading
-    // only the base column and a surface reading only the override are both
-    // caught by the same seed.
-    updateMcqOverride(OVR_ID, { disputed: true });
-    sqlite.prepare("UPDATE mcqs SET disputed = 1 WHERE id = ?").run(BASE_ID);
   });
 
-  it("the seed really does exercise both halves — override and base column", () => {
-    // Guard the guard: if a future ingest ships OVR_ID as disputed, or the
-    // override write stops landing, the agreement below would hold trivially.
-    const raw = sqlite.prepare(
-      `SELECT m.disputed AS base,
-              (SELECT o.disputed FROM mcq_overrides o WHERE o.mcq_id = m.id) AS ovr
-         FROM mcqs m WHERE m.id = ?`,
-    );
-    expect(raw.get(OVR_ID)).toEqual({ base: 0, ovr: 1 });
-    expect(raw.get(BASE_ID)).toEqual({ base: 1, ovr: null });
-    expect(raw.get(CLEAN_ID)).toEqual({ base: 0, ovr: null });
+  it("every keyed question in the shipped corpus is sittable — nothing is parked", () => {
+    // THE assertion the Disputes removal is for. Before it, 79 questions
+    // carried disputed = 1 and no sitting would serve them; the only screen
+    // that could release one was the page that has now gone. If a future
+    // corpus, ingest or predicate starts holding questions back again, the
+    // two counts part company here.
+    const keyed = (sqlite.prepare(
+      `SELECT COUNT(*) c FROM mcqs m WHERE ${EFFECTIVE_ANSWER_SQL}`,
+    ).get() as { c: number }).c;
+    expect(keyed).toBeGreaterThan(1800);
+    expect(sittableIdsFromConstant().length).toBe(keyed);
+    expect(getMcqStats().withAnswer).toBe(keyed);
   });
 
-  it("the list filter, the triage queue and the constant name the same rows", () => {
-    const reference = disputedIdsFromConstant();
-    expect(reference).toContain(OVR_ID);
-    expect(reference).toContain(BASE_ID);
-    expect(reference).not.toContain(CLEAN_ID);
-
-    expect(disputedIdsFromListFilter()).toEqual(reference);
-    expect(disputedIdsFromTriageQueue()).toEqual(reference);
+  it("the list, the stats header and the constant describe one bank", () => {
+    const listed = allIdsFromListFilter();
+    expect(listed.length).toBe(getMcqStats().total);
+    // Everything sittable is listed. (The reverse does not hold: a keyless
+    // question is listed but cannot be sat.)
+    const listedSet = new Set(listed);
+    for (const id of sittableIdsFromConstant()) expect(listedSet.has(id)).toBe(true);
   });
 
-  it("the stats count is the size of that same set", () => {
-    // Both seeded disputes are new, and neither question is discarded, so the
-    // header must have moved by exactly two.
-    expect(getMcqStats().disputed).toBe(disputedBefore + 2);
-    expect(getMcqStats().disputed).toBe(disputedIdsFromConstant().length);
+  it("a hand discard is the one thing that removes a question, from every surface at once", () => {
+    updateMcqOverride(DISCARDED, { excluded: true });
+
+    expect(sittableIdsFromConstant()).not.toContain(DISCARDED);
+    expect(allIdsFromListFilter()).not.toContain(DISCARDED);
+    expect(getMcqStats().papers.find((p) => p.tag === TAG)!.sittable).toBe(paperBefore.sittable - 1);
+    // …and out of the SRS queue too, through the s-aliased form.
+    const srsIds = (sqlite.prepare(
+      `SELECT s.mcq_id AS id FROM mcq_srs_state s WHERE ${SRS_SITTABLE_SQL} ORDER BY s.mcq_id`,
+    ).all() as Array<{ id: string }>).map((r) => r.id);
+    expect(srsIds).toContain(KEPT);
+    expect(srsIds).not.toContain(DISCARDED);
   });
 
-  it("the per-paper sittable flag reads the same two rows out of the paper", () => {
-    const after = getMcqStats().papers.find((p) => p.tag === TAG)!;
-    // A dispute does not remove a question from the paper, nor from the
-    // disputed-allowed pool: it only leaves the DEFAULT sitting.
-    expect(after.count).toBe(paperBefore.count);
-    expect(after.sittableWithDisputed).toBe(paperBefore.sittableWithDisputed);
-    expect(after.sittable).toBe(paperBefore.sittable - 2);
-  });
-
-  it("the SRS sittable count keeps exactly the row the other surfaces call clean", () => {
-    expect(notDisputedIdsFromSrsSittable()).toEqual([CLEAN_ID]);
-  });
-
-  it("the per-question flag the API serves agrees with all of them", () => {
-    expect(getMcq(OVR_ID)!.disputed).toBe(true);
-    expect(getMcq(BASE_ID)!.disputed).toBe(true);
-    expect(getMcq(CLEAN_ID)!.disputed).toBe(false);
-  });
-
-  it("the positive and negative forms of the predicate partition the corpus", () => {
-    // NOT_DISPUTED_SQL_M is the negation of DISPUTED_SQL_M, not a second
-    // hand-written COALESCE that merely looks like one: every row is in exactly
-    // one of the two, with no third bucket where a NULL could hide.
-    const total = (sqlite.prepare("SELECT COUNT(*) c FROM mcqs").get() as { c: number }).c;
-    expect(disputedIdsFromConstant().length + notDisputedCountFromConstant()).toBe(total);
-  });
-
-  it("resolving the dispute moves every surface back together, in one step", () => {
-    // The override wins in BOTH directions — triage writing 0 over a base 1 is
-    // the path that clears the shipped corpus's flags — so a copy that special-
-    // cased the base column would strand BASE_ID here while the others freed it.
-    updateMcqOverride(BASE_ID, { disputed: false });
-    updateMcqOverride(OVR_ID, { disputed: false });
-
-    const reference = disputedIdsFromConstant();
-    expect(reference).not.toContain(OVR_ID);
-    expect(reference).not.toContain(BASE_ID);
-    expect(disputedIdsFromListFilter()).toEqual(reference);
-    expect(disputedIdsFromTriageQueue()).toEqual(reference);
-    expect(getMcqStats().disputed).toBe(reference.length);
+  it("reverting the discard puts it back on every surface, in one step", () => {
+    updateMcqOverride(DISCARDED, { excluded: null });
+    expect(sittableIdsFromConstant()).toContain(DISCARDED);
+    expect(allIdsFromListFilter()).toContain(DISCARDED);
     expect(getMcqStats().papers.find((p) => p.tag === TAG)!.sittable).toBe(paperBefore.sittable);
-    expect(notDisputedIdsFromSrsSittable().sort()).toEqual([OVR_ID, BASE_ID, CLEAN_ID].sort());
-    expect(getMcq(BASE_ID)!.disputed).toBe(false);
+  });
+
+  it("a sitting over the whole bank draws only from the sittable set", () => {
+    sqlite.prepare("DELETE FROM mcq_overrides").run();
+    const sittable = new Set(sittableIdsFromConstant());
+    const sat = startSession({ mode: "tutor", count: 50 });
+    expect(sat.mcqs.length).toBe(50);
+    for (const m of sat.mcqs) expect(sittable.has(m.id)).toBe(true);
   });
 });
 
@@ -239,7 +162,6 @@ describe("getWeakAreas runs the shared WEAK_AREAS_SQL constant", () => {
     sqlite.prepare("DELETE FROM mcq_attempts").run();
     sqlite.prepare("DELETE FROM mcq_srs_state").run();
     sqlite.prepare("DELETE FROM mcq_overrides").run();
-    sqlite.prepare("UPDATE mcqs SET disputed = 0 WHERE id IN (?, ?, ?)").run(OVR_ID, BASE_ID, CLEAN_ID);
   });
 
   it("getWeakAreas is the shared constant, row for row", () => {

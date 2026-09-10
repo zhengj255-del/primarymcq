@@ -12,7 +12,7 @@
 
 import { randomUUID } from "node:crypto";
 import { sqlite, appTzDateISO, todayISO, addDaysISO, daysBetweenISO, localMidnightMs } from "./storage";
-import { EFFECTIVE_ANSWER_SQL, NOT_DISCARDED_SQL, NOT_DISPUTED_SQL_M, SRS_SITTABLE_SQL, WEAK_AREAS_SQL } from "./mcqSittable";
+import { EFFECTIVE_ANSWER_SQL, NOT_DISCARDED_SQL, SRS_SITTABLE_SQL, WEAK_AREAS_SQL } from "./mcqSittable";
 import type {
   SessionFilters, SubmitAttempt, SessionSummary, McqUserStats,
   McqRecord, McqStudySession,
@@ -50,7 +50,7 @@ function scopeWhere(filters: SessionFilters): { where: string[]; params: unknown
     // EFFECTIVE answer (an override can add one, or clear one with '') — the
     // pool must match the withAnswer stat the UI shows.
     EFFECTIVE_ANSWER_SQL,
-    // Questions discarded in dispute triage never enter a study pool.
+    // Questions discarded by hand never enter a study pool.
     NOT_DISCARDED_SQL,
   ];
   const params: unknown[] = [];
@@ -74,15 +74,6 @@ function scopeWhere(filters: SessionFilters): { where: string[]; params: unknown
     // technique as listMcqs' paper filter). Enables "sit the Apr01 paper".
     where.push(`(${filters.papers.map(() => "m.papers LIKE ?").join(" OR ")})`);
     params.push(...filters.papers.map((p) => `%${JSON.stringify(p).slice(1, -1)}%`));
-  }
-  if (filters.excludeDisputed) {
-    // Effective dispute (override wins over base) — same definition as the
-    // MCQs page filter and stats. The raw base column kept excluding disputes
-    // the user already resolved in triage, and never excluded ones they raised.
-    // THE shared constant, not a retyped copy: SRS_SITTABLE_SQL carries the
-    // same test, and the count and the queue lying to each other is precisely
-    // the defect that predicate exists to prevent.
-    where.push(NOT_DISPUTED_SQL_M);
   }
   return { where, params };
 }
@@ -144,7 +135,7 @@ function pickMcqIds(opts: SelectionOpts): string[] {
 // app Settings.
 //
 // SCOPE vs LIMITS. The lanes are filtered by the user's scope (topics /
-// domains / LOs / disputed); the daily limits are deliberately BANK-WIDE, one
+// domains / LOs); the daily limits are deliberately BANK-WIDE, one
 // budget for the whole corpus, which is what the Settings copy promises and
 // what stops scope-switching from minting fresh allowance. That means "0 new"
 // can mean "today's budget is spent" rather than "nothing left to learn here",
@@ -160,7 +151,7 @@ const LEARN_AHEAD_MS = 20 * 60 * 1000; // Anki's default learn-ahead limit
 // which is right, because relearn steps are due within minutes anyway. It
 // exists because two operations mint interval-0 rows in BULK, outside anything
 // Anki has an equivalent for: resetSrsOnKeyChange (every applied answer-key
-// change — a triage fix, a hand edit, or a revert) and the one-shot seed's
+// change — a hand edit or a revert) and the one-shot seed's
 // relearn-now branch. Without it a run of key changes produced one sitting of
 // every question it touched, with srs_max_reviews_per_day and srs_new_per_day
 // both powerless to bound it. Reuses the review limit rather than adding a

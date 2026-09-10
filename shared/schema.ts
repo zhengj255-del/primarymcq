@@ -63,7 +63,7 @@ export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 // skipped when the stored content hash already matches. Not user-authored, so
 // no insert schema is exposed to the API.
 //
-// User edits to MCQs (stem/options/answer/reason/disputed) are stored in a
+// User edits to MCQs (stem/options/answer/reason) are stored in a
 // separate mcq_overrides table so the mcqs.json re-ingest on boot doesn't wipe
 // them. One row per edited MCQ. Only overridden fields are non-null; unset
 // fields fall through to the base mcqs row. An empty-string answer override
@@ -80,7 +80,6 @@ export const mcqEditSchema = z.object({
   }).optional(),
   answer: z.enum(["A", "B", "C", "D", "E", ""]).nullable().optional(),
   reason: z.string().max(20000).optional(),
-  disputed: z.boolean().optional(),
 });
 export type McqEdit = z.infer<typeof mcqEditSchema>;
 
@@ -122,7 +121,6 @@ export const sessionFiltersSchema = z.object({
   domains: z.array(z.string()).optional(),        // domain key list; empty/undef = all
   loCodes: z.array(z.string()).optional(),        // LO code list; empty/undef = all
   papers: z.array(z.string()).optional(),         // past-paper tags (e.g. "Apr01"); empty/undef = all
-  excludeDisputed: z.boolean().optional(),
   completion: z.enum(["all", "completed", "not-completed", "review"]).optional(), // filter by prior-attempt status; "review" = never answered correctly (unseen + previously incorrect)
   srsSkipNew: z.boolean().optional(),             // SRS only: serve learning + reviews, no new intake this sitting
   weakAreas: z.boolean().optional(),              // auto-pick from lowest-accuracy topics
@@ -211,7 +209,6 @@ export interface McqRecord {
   answer: string | null;         // 'A'..'E' or null
   reason: string;
   urls: string[];                // extracted from reason
-  disputed: boolean;             // "Answer changed" seen (override wins over the corpus flag)
   parentCode: string | null;     // for alt-versions grouped under parent
   // Basename of an SVG in client/public/mcq-figures/ for questions whose stem
   // refers to a graph/diagram ("see graph below"). Null for the vast majority
@@ -219,23 +216,6 @@ export interface McqRecord {
   figure: string | null;
   loCodes: string[];        // ANZCA LO codes linked to this MCQ (empty if none matched)
   edited: boolean;          // true if user has overridden any field for this MCQ
-  excluded: boolean;        // true = discarded in dispute triage; hidden from study pools/SRS
+  excluded: boolean;        // true = discarded by hand; hidden from study pools/SRS
 }
 
-// Dispute-triage actions (POST /api/mcqs/:id/triage). accept = dispute noise,
-// content stands; fix = apply edits + clear dispute; discard = exclude from
-// study rotation; reopen = undo any of the above back to pending.
-export const mcqTriageSchema = z.object({
-  action: z.enum(["accept", "fix", "discard", "reopen"]),
-  edit: z.object({
-    stem: z.string().min(1).max(10000).optional(),
-    options: z.object({
-      A: z.string().max(4000), B: z.string().max(4000), C: z.string().max(4000),
-      D: z.string().max(4000), E: z.string().max(4000),
-    }).optional(),
-    answer: z.enum(["A", "B", "C", "D", "E", ""]).nullable().optional(),
-    reason: z.string().max(20000).optional(),
-  }).optional(),
-});
-export type McqTriageInput = z.infer<typeof mcqTriageSchema>;
-export type McqTriageStatus = "pending" | "accepted" | "fixed" | "discarded";

@@ -58,9 +58,6 @@ export function RevertMcqButton({
       queryClient.invalidateQueries({ queryKey: ["/api/mcqs/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/mcqs/user-stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/mcqs/weak-areas"] });
-      // Reverting can resurrect/clear a dispute — the triage queue's own key
-      // is not covered by the "/api/mcqs" prefix above.
-      queryClient.invalidateQueries({ queryKey: ["/api/mcqs/triage"] });
       toast({
         title: "Reverted to original",
         description: `${mcq.displayCode} restored to the base corpus value.`,
@@ -99,8 +96,8 @@ export function RevertMcqButton({
           <AlertDialogHeader>
             <AlertDialogTitle>Revert {mcq.displayCode} to original?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes your edits to this MCQ and restores the original stem, options, answer,
-              reasoning, and disputed flag from the base corpus. Your attempt history is not affected.
+              This removes your edits to this MCQ and restores the original stem, options, answer
+              and reasoning from the base corpus. Your attempt history is not affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

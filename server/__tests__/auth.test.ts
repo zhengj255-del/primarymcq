@@ -75,7 +75,12 @@ describe("with APP_PASSWORD set, the gate is closed", () => {
   });
 
   it("closes reads and writes alike, all the way down the MCQ API", async () => {
-    for (const path of ["/api/settings", "/api/mcqs", "/api/mcqs/user-stats", "/api/mcqs/triage", "/api/export"]) {
+    // Includes the wildcard arm (/api/mcqs/<anything>): the gate must close in
+    // front of route matching, not behind it, so a path that resolves to no
+    // handler at all still answers 401 rather than leaking a 404 that tells an
+    // anonymous caller which routes exist.
+    for (const path of ["/api/settings", "/api/mcqs", "/api/mcqs/user-stats",
+                        "/api/mcqs/weak-areas", "/api/mcqs/no-such-route", "/api/export"]) {
       const res = await fetch(`${baseUrl}${path}`);
       expect(res.status, path).toBe(401);
     }

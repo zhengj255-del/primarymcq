@@ -6,7 +6,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sqlite, storage, todayISO } from "../storage";
-import { ensureBaseDisputed, clearBaseDisputed } from "./disputedFixture";
 import { registerRoutes, EXPORT_TABLES } from "../routes";
 import { installAuth } from "../auth";
 import { installBodyParsers, safeErrorFields } from "../bodyParsers";
@@ -17,7 +16,7 @@ import { serveStatic } from "../static";
 // dev/test mode). Every route the client calls is driven here the way the
 // client calls it: the study loops (tutor → attempts → finish → summary; SRS →
 // reveal → rate → undo), settings, the progress wipe, the backup round-trip,
-// the corpus edit/triage routes, and — the one that is easy to lose in a
+// the corpus edit routes, and — the one that is easy to lose in a
 // refactor — ROUTE ORDER: every literal /api/mcqs/... path must answer before
 // the wildcard /api/mcqs/:id can swallow it as an id lookup.
 //
@@ -26,8 +25,8 @@ import { serveStatic } from "../static";
 // unknown /api path can be asserted without a client build.
 // ---------------------------------------------------------------------------
 
-// A topic that ships with no disputed questions, so `excludeDisputed` sittings
-// draw from a pool whose size is known and every sitting is deterministic.
+// One topic, so every sitting draws from a pool whose size is known and is
+// deterministic.
 const TOPIC = "gastrointestinal";
 
 let server: Server;
@@ -119,30 +118,19 @@ describe("open endpoints", () => {
 // ---------------------------------------------------------------------------
 describe("corpus reads", () => {
   it("GET /api/mcqs/stats has the McqStats shape", async () => {
-    // The corpus is the tracker's curated copy: it may arrive with every
-    // question keyed and no dispute open, so neither "some keyless" nor "some
-    // disputed" is a fact about the data any more. Seed the dispute for this
-    // one read and put the corpus back; the count is checked against what was
-    // seeded, not against a number the file happened to ship with.
-    const seeded = ensureBaseDisputed(TOPIC);
-    try {
-      const res = await api("/api/mcqs/stats");
-      expect(res.status).toBe(200);
-      const s = await res.json();
-      expect(Object.keys(s).sort()).toEqual(["byTopic", "disputed", "papers", "total", "withAnswer"]);
-      expect(s.total).toBeGreaterThan(1800);
-      expect(s.withAnswer).toBeGreaterThan(0);
-      expect(s.withAnswer).toBeLessThanOrEqual(s.total);
-      expect(s.disputed).toBeGreaterThanOrEqual(seeded.ids.length);
-      const gi = s.byTopic.find((t: any) => t.slug === TOPIC);
-      expect(gi).toMatchObject({ slug: TOPIC, name: expect.any(String), domain: expect.any(String), count: topicTotal });
-      expect(typeof gi.linked).toBe("number");
-      expect(s.papers.length).toBeGreaterThan(0);
-      for (const p of s.papers) {
-        expect(Object.keys(p).sort()).toEqual(["count", "sittable", "sittableWithDisputed", "tag"]);
-      }
-    } finally {
-      clearBaseDisputed(seeded.marked);
+    const res = await api("/api/mcqs/stats");
+    expect(res.status).toBe(200);
+    const s = await res.json();
+    expect(Object.keys(s).sort()).toEqual(["byTopic", "papers", "total", "withAnswer"]);
+    expect(s.total).toBeGreaterThan(1800);
+    expect(s.withAnswer).toBeGreaterThan(0);
+    expect(s.withAnswer).toBeLessThanOrEqual(s.total);
+    const gi = s.byTopic.find((t: any) => t.slug === TOPIC);
+    expect(gi).toMatchObject({ slug: TOPIC, name: expect.any(String), domain: expect.any(String), count: topicTotal });
+    expect(typeof gi.linked).toBe("number");
+    expect(s.papers.length).toBeGreaterThan(0);
+    for (const p of s.papers) {
+      expect(Object.keys(p).sort()).toEqual(["count", "sittable", "tag"]);
     }
   });
 
@@ -154,7 +142,7 @@ describe("corpus reads", () => {
       expect(m.topicSlug).toBe(TOPIC);
       expect(Object.keys(m)).toEqual(expect.arrayContaining([
         "id", "code", "displayCode", "topicName", "domain", "papers", "stem", "options",
-        "answer", "reason", "urls", "disputed", "figure", "loCodes", "edited", "excluded",
+        "answer", "reason", "urls", "figure", "loCodes", "edited", "excluded",
       ]));
     }
     const next = await (await api(`/api/mcqs?topic=${TOPIC}&limit=5&offset=5`)).json();
@@ -165,13 +153,11 @@ describe("corpus reads", () => {
     expect(big.items).toHaveLength(200);
     expect(big.total).toBeGreaterThan(200);
 
-    // disputed=true is the stats header's own count, row for row.
+    // No question is held out of the bank any more: the list's own total is
+    // the stats header's total, and `disputed` is not a filter the API takes.
     const stats = await (await api("/api/mcqs/stats")).json();
-    const disputed = await (await api("/api/mcqs?disputed=true&limit=200")).json();
-    expect(disputed.total).toBe(stats.disputed);
-    expect(disputed.items.every((m: any) => m.disputed === true)).toBe(true);
-    const clean = await (await api(`/api/mcqs?topic=${TOPIC}&disputed=false&limit=200`)).json();
-    expect(clean.total).toBe(topicTotal);
+    expect((await (await api("/api/mcqs?limit=1")).json()).total).toBe(stats.total);
+    expect((await (await api("/api/mcqs?disputed=true&limit=1")).json()).total).toBe(stats.total);
 
     // Nothing has been attempted yet: completed=false is the whole topic and
     // completed=true is empty; the unmastered pool is everything.
@@ -223,7 +209,7 @@ let tutorIds: string[];
 
 describe("the tutor loop: start → attempts → finish → summary", () => {
   it("starts a tutor sitting of the requested size", async () => {
-    const res = await post("/api/mcqs/session", { mode: "tutor", topics: [TOPIC], count: 3, excludeDisputed: true });
+    const res = await post("/api/mcqs/session", { mode: "tutor", topics: [TOPIC], count: 3 });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(typeof body.sessionId).toBe("string");
@@ -331,24 +317,6 @@ describe("route order: literal /api/mcqs/... paths answer before the :id wildcar
     expect(s.byTopic.find((t: any) => t.slug === TOPIC)).toMatchObject({ poolSize: topicAnswered, attempted: 2, correctLatest: 1 });
   });
 
-  it("GET /api/mcqs/triage is the queue, with counts and rows only", async () => {
-    // A queue with nothing in it proves nothing about the route; seed a dispute
-    // so there is a pending row to come back, then put the corpus back.
-    const seeded = ensureBaseDisputed(TOPIC);
-    try {
-      const res = await api("/api/mcqs/triage");
-      expect(res.status).toBe(200);
-      const t = await res.json();
-      expect(Object.keys(t).sort()).toEqual(["counts", "items"]);
-      expect(Object.keys(t.counts).sort()).toEqual(["accepted", "discarded", "fixed", "pending", "total"]);
-      expect(t.items.length).toBe(t.counts.total);
-      expect(t.counts.pending).toBeGreaterThanOrEqual(seeded.ids.length);
-      expect(t.items.every((m: any) => typeof m.triageStatus === "string")).toBe(true);
-    } finally {
-      clearBaseDisputed(seeded.marked);
-    }
-  });
-
   it("the other literal paths answer too", async () => {
     expect(await (await api("/api/mcqs/weak-areas")).json()).toEqual({ items: [] });
     expect(await (await api("/api/mcqs/srs/due")).json()).toEqual({ items: [] });
@@ -370,7 +338,7 @@ let srsIds: string[];
 
 describe("the SRS loop: start → reveal → rate → undo, with queue-stats in step", () => {
   it("an SRS sitting is not a session and serves today's new intake", async () => {
-    const res = await post("/api/mcqs/session", { mode: "srs", topics: [TOPIC], count: 1, excludeDisputed: true });
+    const res = await post("/api/mcqs/session", { mode: "srs", topics: [TOPIC], count: 1 });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.sessionId).toBeNull();
@@ -551,7 +519,7 @@ describe("POST /api/mcqs/reset", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("editing and triaging a question", () => {
+describe("editing a question", () => {
   let id: string;
   beforeAll(() => {
     id = (sqlite.prepare("SELECT id FROM mcqs WHERE topic_slug = ? AND answer IS NOT NULL ORDER BY id LIMIT 1").get(TOPIC) as { id: string }).id;
@@ -559,13 +527,10 @@ describe("editing and triaging a question", () => {
   const enc = () => encodeURIComponent(id);
 
   it("PATCH stores an override; GET serves it merged", async () => {
-    const res = await patch(`/api/mcqs/${enc()}`, { reason: "Edited on the site.", disputed: true });
+    const res = await patch(`/api/mcqs/${enc()}`, { reason: "Edited on the site." });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ id, reason: "Edited on the site.", disputed: true, edited: true, excluded: false });
-    expect(await (await api(`/api/mcqs/${enc()}`)).json()).toMatchObject({ reason: "Edited on the site.", disputed: true, edited: true });
-    // The dispute the user raised is now in the triage queue, pending.
-    const t = await (await api("/api/mcqs/triage")).json();
-    expect(t.items.find((m: any) => m.id === id)?.triageStatus).toBe("pending");
+    expect(await res.json()).toMatchObject({ id, reason: "Edited on the site.", edited: true, excluded: false });
+    expect(await (await api(`/api/mcqs/${enc()}`)).json()).toMatchObject({ reason: "Edited on the site.", edited: true });
   });
 
   it("PATCH refuses a bad edit and an unknown id", async () => {
@@ -574,49 +539,29 @@ describe("editing and triaging a question", () => {
     expect((await patch("/api/mcqs/no-such-topic__NOPE-1", { reason: "x" })).status).toBe(404);
   });
 
-  it("triage: accept → reopen → discard → fix, each visible on the record", async () => {
-    const accept = await post(`/api/mcqs/${enc()}/triage`, { action: "accept" });
-    expect(accept.status).toBe(200);
-    // The dispute is cleared and the earlier reason edit is kept — which is
-    // exactly what makes the verdict read "fixed" rather than "accepted": a
-    // resolved dispute on a content-edited question IS a fix.
-    expect(await accept.json()).toMatchObject({ id, triageStatus: "fixed", disputed: false, edited: true, reason: "Edited on the site." });
-
-    // A plain accept on an untouched question reads "accepted".
-    const other = (sqlite.prepare(
-      "SELECT id FROM mcqs WHERE topic_slug = ? AND answer IS NOT NULL AND id <> ? ORDER BY id LIMIT 1",
-    ).get(TOPIC, id) as { id: string }).id;
-    await patch(`/api/mcqs/${encodeURIComponent(other)}`, { disputed: true });
-    expect(await (await post(`/api/mcqs/${encodeURIComponent(other)}/triage`, { action: "accept" })).json())
-      .toMatchObject({ id: other, triageStatus: "accepted", disputed: false });
-    await del(`/api/mcqs/${encodeURIComponent(other)}/override`);
-
-    expect(await (await post(`/api/mcqs/${enc()}/triage`, { action: "reopen" })).json()).toMatchObject({ triageStatus: "pending" });
-
-    const discard = await (await post(`/api/mcqs/${enc()}/triage`, { action: "discard" })).json();
-    expect(discard).toMatchObject({ triageStatus: "discarded", excluded: true });
-    // Discarded: out of the bank's list, still on the Disputes ledger.
-    const list = await (await api(`/api/mcqs?topic=${TOPIC}&limit=200`)).json();
-    expect(list.total).toBe(topicTotal - 1);
-    expect(list.items.some((m: any) => m.id === id)).toBe(false);
-    const t = await (await api("/api/mcqs/triage")).json();
-    expect(t.items.find((m: any) => m.id === id)?.triageStatus).toBe("discarded");
-    expect(t.counts.discarded).toBe(1);
-
-    // fix applies edits AND clears the dispute in one step.
-    const fix = await (await post(`/api/mcqs/${enc()}/triage`, { action: "fix", edit: { reason: "Fixed in triage." } })).json();
-    expect(fix).toMatchObject({ triageStatus: "fixed", disputed: false, excluded: false, reason: "Fixed in triage." });
-
-    expect((await post(`/api/mcqs/${enc()}/triage`, { action: "burn" })).status).toBe(400);
-    expect((await post("/api/mcqs/no-such-topic__NOPE-1/triage", { action: "accept" })).status).toBe(404);
+  it("the triage routes are gone with the Disputes page", async () => {
+    // The dispute concept was retired in Sep 2026. /api/mcqs/triage was a
+    // LITERAL path registered before the /api/mcqs/:id wildcard, so if the
+    // route were merely unregistered and the wildcard left to swallow it, this
+    // would 404 either way — assert the 404 body is the wildcard's, proving the
+    // literal handler is really gone and not just shadowed.
+    const t = await api("/api/mcqs/triage");
+    expect(t.status).toBe(404);
+    expect(await t.json()).toEqual({ error: "MCQ not found" });
+    expect((await post(`/api/mcqs/${enc()}/triage`, { action: "accept" })).status).toBe(404);
+    // …and `disputed` is no longer a field a PATCH can set: it is stripped by
+    // the edit schema rather than stored, so the record comes back without it.
+    const after = await (await patch(`/api/mcqs/${enc()}`, { disputed: true } as never)).json();
+    expect(after.disputed).toBeUndefined();
+    expect((await (await api(`/api/mcqs?topic=${TOPIC}&limit=1`)).json()).total).toBe(topicTotal);
   });
 
   it("DELETE …/override reverts to the corpus", async () => {
     const res = await del(`/api/mcqs/${enc()}/override`);
     expect(res.status).toBe(200);
     const rec = await res.json();
-    expect(rec).toMatchObject({ id, edited: false, excluded: false, disputed: false });
-    expect(rec.reason).not.toBe("Fixed in triage.");
+    expect(rec).toMatchObject({ id, edited: false, excluded: false });
+    expect(rec.reason).not.toBe("Edited on the site.");
     expect((await del("/api/mcqs/no-such-topic__NOPE-1/override")).status).toBe(404);
     expect((await (await api(`/api/mcqs?topic=${TOPIC}&limit=1`)).json()).total).toBe(topicTotal);
   });
@@ -632,7 +577,7 @@ describe("backup: GET /api/export → POST /api/import?confirm=YES", () => {
     editedId = (sqlite.prepare("SELECT id FROM mcqs WHERE topic_slug = ? AND answer IS NOT NULL ORDER BY id LIMIT 1").get(TOPIC) as { id: string }).id;
     await patch("/api/settings", { srsNewPerDay: 33 });
     await patch(`/api/mcqs/${encodeURIComponent(editedId)}`, { reason: "Kept across the round-trip." });
-    const sitting = await (await post("/api/mcqs/session", { mode: "srs", topics: [TOPIC], count: 1, excludeDisputed: true })).json();
+    const sitting = await (await post("/api/mcqs/session", { mode: "srs", topics: [TOPIC], count: 1 })).json();
     const id = sitting.mcqs[0].id;
     await post("/api/mcqs/attempt", { sessionId: null, mcqId: id, mode: "srs", selected: answerOf(id), timeMs: 700 });
     await post("/api/mcqs/srs/rate", { mcqId: id, rating: 3 }); // attempts + srs_state + srs_undo

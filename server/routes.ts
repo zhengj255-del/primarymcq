@@ -5,7 +5,7 @@ import { storage, sqlite } from "./storage";
 import { buildId } from "./buildId";
 import {
   listMcqs, getMcq, getMcqsByLo, getMcqStats,
-  updateMcqOverride, revertMcqOverride, listDisputeTriage, resolveMcqDispute,
+  updateMcqOverride, revertMcqOverride,
 } from "./mcqs";
 import {
   startSession as startMcqStudySession,
@@ -25,7 +25,7 @@ import {
 } from "./mcqStudy";
 import {
   settingsPatchSchema, sessionFiltersSchema, submitAttemptSchema, srsRateSchema,
-  mcqEditSchema, mcqTriageSchema,
+  mcqEditSchema,
 } from "@shared/schema";
 
 // -----------------------------------------------------------------------------
@@ -106,14 +106,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const parse = (name: string) => (typeof req.query[name] === "string" ? String(req.query[name]) : undefined);
     const limit = Number(req.query.limit ?? 50);
     const offset = Number(req.query.offset ?? 0);
-    const disputedRaw = parse("disputed");
     const completedRaw = parse("completed");
     const result = listMcqs({
       topic: parse("topic"),
       domain: parse("domain"),
       paper: parse("paper"),
       q: parse("q"),
-      disputed: disputedRaw === "true" ? true : disputedRaw === "false" ? false : undefined,
       completed: completedRaw === "true" ? true : completedRaw === "false" ? false : undefined,
       unmastered: parse("unmastered") === "true" ? true : undefined,
       limit: Number.isFinite(limit) ? limit : 50,
@@ -264,19 +262,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       topics: list(req.query.topics),
       domains: list(req.query.domains),
       loCodes: list(req.query.loCodes),
-      // ALWAYS true — the `excludeDisputed` query parameter is deliberately
-      // not read. Disputed questions are excluded from the SRS queue by one
-      // rule, stated once in SRS_SITTABLE_SQL (server/mcqSittable.ts), and
-      // every "SRS due N" the app shows inherits it unconditionally. This
-      // endpoint describes THAT queue, so it cannot be allowed a second
-      // opinion: while it parsed the flag and defaulted it to FALSE, a caller
-      // that simply omitted the parameter got a setup strip promising reviews
-      // no count agreed with and no sitting would serve.
-      // The escape (D2): should a "study disputed questions anyway" pool ever
-      // exist, SRS_SITTABLE_SQL becomes a function of that flag FIRST and this
-      // route takes the same flag in the same commit — the count and the queue
-      // move together or they drift again.
-      excludeDisputed: true,
       // Mirror the sitting's no-new toggle so the panel's numbers are the
       // numbers Study will actually serve.
       srsSkipNew: req.query.skipNew === "1" || req.query.skipNew === "true",
@@ -286,28 +271,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/mcqs/weak-areas", (_req, res) => {
     res.json({ items: getMcqWeakAreas() });
-  });
-
-  // ----- Dispute triage -----
-  // Every base-disputed MCQ with its triage status + counts. Registered
-  // before /api/mcqs/:id so "triage" isn't swallowed as an id.
-  app.get("/api/mcqs/triage", (_req, res) => {
-    res.json(listDisputeTriage());
-  });
-
-  // One triage decision: accept (dispute is noise, content stands), fix
-  // (apply edits + clear dispute), discard (exclude from study pools/SRS),
-  // reopen (undo the verdict; keeps any content edits).
-  app.post("/api/mcqs/:id/triage", (req, res) => {
-    const parsed = mcqTriageSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const result = resolveMcqDispute(
-      decodeURIComponent(req.params.id),
-      parsed.data.action,
-      parsed.data.edit,
-    );
-    if (!result) return res.status(404).json({ error: "MCQ not found" });
-    res.json(result);
   });
 
   // Detail route uses the topicSlug__code id form. Match anything (including slashes
