@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SittingTag } from "@/components/SittingTag";
@@ -29,13 +29,81 @@ interface McqStats {
 const PAGE_SIZE = 25;
 
 // -------------------------------------------------------------------------------------------------
+// WHERE THE DETAIL CARD GOES — the only place in this app that asks the viewport in JS.
+//
+// This is the app's one master/detail layout. At lg it is list-left / sticky-detail-right, which is
+// right and stays. Below lg the grid collapses to a single column, and the detail card was the second
+// column — so it stacked under the WHOLE list AND under the pager. Tapping row 1 of 25 on a phone meant
+// scrolling past 24 rows to read the answer you just asked for.
+//
+// The card now renders directly after the row it belongs to below lg. It MOVES IN THE DOM rather than
+// being drawn in two places behind `lg:hidden` / `hidden lg:block`: a second copy would put twelve of
+// McqDetail's data-testids in the DOM twice and mount RevertMcqButton's dialog alongside its twin.
+// Moving the node also keeps reading and focus order agreeing with
+// what is on screen — a screen-reader user reaches the card straight after the row they opened, not after
+// the remaining 24 rows and the pager (WCAG 1.3.2, 2.4.3). A CSS-only version using `display: contents`
+// plus `order` can produce the same picture without JS, but it leaves those two orders disagreeing.
+//
+// 1024px is Tailwind's default `lg` (tailwind.config.ts declares no `screens`), and is deliberately the
+// same number as the `lg:` prefixes on the grid below. THE TWO MUST AGREE: at a width where JS says
+// desktop but CSS still says one column, the card goes back to the bottom of the list — the original bug,
+// on a wider screen. Nothing in the browser enforces the pairing, so mcqInlineDetail.test.tsx reads this
+// file and fails if the two ever drift.
+export const LG_MIN_PX = 1024;
+const LG_QUERY = `(min-width: ${LG_MIN_PX}px)`;
+
+// jsdom ships no matchMedia at all, so it is guarded rather than assumed. Deliberately not cached at
+// module scope: a cached MediaQueryList would outlive a test's stub and leak the first test's `matches`
+// into every later one.
+const lgQuery = (): MediaQueryList | null =>
+  typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(LG_QUERY) : null;
+
+function subscribeToLg(onChange: () => void): () => void {
+  const mql = lgQuery();
+  if (!mql) return () => {};
+  // addEventListener on a MediaQueryList is Safari 14+; addListener is the deprecated fallback older
+  // WebKit still exposes, and this app is used on phones.
+  if (typeof mql.addEventListener === "function") {
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }
+  mql.addListener(onChange);
+  return () => mql.removeListener(onChange);
+}
+
+/** True when the viewport is wide enough for the two-column split.
+ *
+ *  useSyncExternalStore rather than useState + useEffect: the value is read DURING the first render, so a
+ *  desktop user never sees the card painted inline under its row and then jump to the right-hand column —
+ *  an effect runs after paint, which is exactly the flash it would produce.
+ *
+ *  Falls back to FALSE wherever matchMedia is absent. Mobile is the safe default for the same reason
+ *  Tailwind's prefixes are min-width: the inline placement is an ordinary single-column document that
+ *  reads correctly at any width, whereas guessing desktop and being wrong puts a phone back on the bug
+ *  this exists to fix. In a real browser the fallback is never reached. */
+function useIsDesktop(): boolean {
+  return useSyncExternalStore(subscribeToLg, () => lgQuery()?.matches ?? false, () => false);
+}
+
+// -------------------------------------------------------------------------------------------------
 // Detail panel — shows the full stem/options/answer/reason with LO links
 // -------------------------------------------------------------------------------------------------
-function McqDetail({ mcq, onClose }: { mcq: McqRecord; onClose: () => void }) {
+function McqDetail({ mcq, onClose, onEdit, className }: {
+  mcq: McqRecord;
+  onClose: () => void;
+  onEdit: () => void;
+  className?: string;
+}) {
   const answer = mcq.answer;
-  const [editOpen, setEditOpen] = useState(false);
+  // `sticky top-4` is a property of the RIGHT-HAND COLUMN, not of the card: pinned to the viewport top
+  // while sitting inline in the list, the card would slide away from the row it belongs to.
+  //
+  // The Edit dialog and its open flag deliberately live on the PAGE, not here. This card is unmounted and
+  // remounted whenever it changes position — which happens when the viewport crosses lg, e.g. rotating a
+  // tablet — and local state does not survive that. It used to hold `editOpen`, so a rotation mid-edit
+  // closed the dialog and threw away everything typed into it.
   return (
-    <Card className="sticky top-4" data-testid={`card-mcq-detail-${mcq.id}`}>
+    <Card className={className} data-testid={`card-mcq-detail-${mcq.id}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -57,7 +125,7 @@ function McqDetail({ mcq, onClose }: { mcq: McqRecord; onClose: () => void }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setEditOpen(true)}
+              onClick={onEdit}
               data-testid="button-edit-mcq"
             >
               <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
@@ -66,7 +134,6 @@ function McqDetail({ mcq, onClose }: { mcq: McqRecord; onClose: () => void }) {
             <Button variant="ghost" size="sm" onClick={onClose} data-testid="button-close-detail">Close</Button>
           </div>
         </div>
-        <McqEditDialog mcq={mcq} open={editOpen} onOpenChange={setEditOpen} />
         {mcq.papers.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {mcq.papers.map((p, i) => (
@@ -168,15 +235,24 @@ function McqRow({
   mcq,
   active,
   onClick,
+  controls,
 }: {
   mcq: McqRecord;
   active: boolean;
-  onClick: () => void;
+  // Handed the row's own element so the page can keep it under the thumb — see
+  // selectRow in MCQsPage.
+  onClick: (el: HTMLButtonElement) => void;
+  // Set only where the card really does render inline under this row, so the promise
+  // aria-controls makes ("the thing I point at is next to me") is not made on desktop,
+  // where the card lives in the other column.
+  controls?: string;
 }) {
   return (
     <button
       className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors hover-elevate ${active ? "border-primary bg-primary/5" : "border-border"}`}
-      onClick={onClick}
+      onClick={(e) => onClick(e.currentTarget)}
+      aria-expanded={controls ? active : undefined}
+      aria-controls={controls && active ? controls : undefined}
       data-testid={`row-mcq-${mcq.id}`}
     >
       <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -210,6 +286,9 @@ export default function MCQsPage() {
   const [completion, setCompletion] = useState<"all" | "completed" | "not-completed" | "review">("all");
   const [page, setPage] = useState<number>(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Owned by the page, not by McqDetail: the card is remounted whenever it changes position (crossing lg),
+  // and an open dialog with a half-typed correction in it must survive that.
+  const [editOpen, setEditOpen] = useState(false);
 
   // Debounce search input. Must be useEffect: only an effect's cleanup runs
   // between keystrokes — useMemo's "cleanup" return value is never invoked, so
@@ -258,6 +337,89 @@ export default function MCQsPage() {
   const total = listQuery.data?.total ?? 0;
   const items = listQuery.data?.items ?? [];
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const isDesktop = useIsDesktop();
+
+  // ----- Keeping the tapped row under the thumb -------------------------------------------------
+  // Inline placement moves a card that is usually TALLER THAN THE SCREEN. Opening question 12 while
+  // question 3's card is open removes that card from above row 12 and rebuilds it below, so row 12
+  // travels up the document by the old card's height while the rows past it do not move at all. The
+  // browser keeps the scroll offset, so the row just tapped — and the answer asked for — end up a
+  // screenful above the viewport. iOS Safari implements no scroll anchoring, so on the very phone in
+  // question there is no compensation at all.
+  //
+  // So the row is anchored by hand: its distance from the top of the viewport is read at tap time and
+  // restored once React has re-laid-out. In a layout effect, before the browser paints, so nothing is
+  // ever drawn in the wrong place. Element.scrollIntoView is NOT used — jsdom does not implement it
+  // (it would throw during commit and tear down the tree), and it would move the row to the top of the
+  // screen rather than leaving it where the finger already is.
+  // The anchor is the row the user just TAPPED — the thing their eye and thumb are on — not whichever
+  // row happened to be open. React keeps the same DOM node for a row across the re-render (same key),
+  // so the element captured here is the one to re-measure afterwards.
+  const anchorRef = useRef<{ el: HTMLElement; top: number } | null>(null);
+
+  const selectRow = (id: string | null, el?: HTMLElement) => {
+    // Setting the same id is a React bail-out: no re-render, so the layout effect never runs and would
+    // leave this anchor loaded to fire a phantom scroll at the next breakpoint change.
+    if (id === selectedId) { anchorRef.current = null; return; }
+    // Measured BEFORE setState: once React re-renders, the old geometry is gone.
+    anchorRef.current = el ? { el, top: el.getBoundingClientRect().top } : null;
+    setSelectedId(id);
+  };
+
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    anchorRef.current = null;
+    // Desktop moves nothing in the list, so there is nothing to correct.
+    if (!anchor || isDesktop) return;
+
+    // 1. Undo the drift, so the row is back where the thumb left it.
+    const drift = anchor.el.getBoundingClientRect().top - anchor.top;
+    // Zero on a first selection (nothing above the row changed) and in jsdom, which lays nothing out.
+    if (drift !== 0) window.scrollBy(0, drift);
+
+    // 2. Then make sure the answer is actually ON SCREEN. Pinning the row is necessary but not
+    //    sufficient: the card begins at the row's bottom edge, so tapping a row low in the viewport
+    //    leaves the whole card below the fold and the only visible change is the row's highlight —
+    //    the original complaint restated. Lift the row toward the top of the content, but ONLY when
+    //    it is sitting low enough for that to be the case, so a tap high on the screen moves nothing.
+    const rect = anchor.el.getBoundingClientRect();
+    const viewport = window.innerHeight || 0;
+    if (viewport > 0 && rect.bottom > viewport / 2) {
+      // The app header is sticky at top: 0, so scrolling the row to y=0 would tuck it underneath.
+      // Measured rather than guessed — it is two rows tall below 860px and one above.
+      const header = document.querySelector(".ledger-sidebar");
+      const clear = (header?.getBoundingClientRect().height ?? 0) + 8;
+      window.scrollBy(0, rect.top - clear);
+    }
+  }, [selectedId, isDesktop]);
+
+  // The one detail element. Rendered inline under its row below lg and in the right-hand column at lg —
+  // never both, so every data-testid inside it stays unique.
+  // Once a row is selected this is NEVER null: below lg the card is the only feedback that the tap landed
+  // at all, so every state of the fetch has to draw something. The spinner is the fallthrough rather than
+  // an `isLoading` branch on purpose — an offline tap leaves React Query reporting
+  // `isPending` with `fetchStatus: "paused"`, which is isLoading=false, isError=false and no data, and an
+  // isLoading branch rendered nothing for it: the tap looked broken, and aria-controls pointed at an id
+  // that was not in the document.
+  const detailNode = !selectedId ? null : detailQuery.data ? (
+    <McqDetail
+      mcq={detailQuery.data}
+      onClose={() => selectRow(null)}
+      onEdit={() => setEditOpen(true)}
+      className={isDesktop ? "sticky top-4" : undefined}
+    />
+  ) : detailQuery.isError ? (
+    // With a row SELECTED and its fetch failed, falling through to "Select an MCQ…" pretended nothing
+    // was clicked — and the cached error made re-clicking the row a silent no-op.
+    <Card><CardContent className="py-8 text-center text-sm text-amber-600 dark:text-amber-400" data-testid="mcq-detail-error">
+      Couldn't load this MCQ — refresh to retry.
+    </CardContent></Card>
+  ) : (
+    <Card><CardContent className="py-8 flex items-center justify-center text-sm text-muted-foreground gap-2" data-testid="mcq-detail-pending">
+      <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+    </CardContent></Card>
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-[1400px] mx-auto">
@@ -349,13 +511,29 @@ export default function MCQsPage() {
             </div>
           )}
           {items.map((m) => (
-            <McqRow
-              key={m.id}
-              mcq={m}
-              active={selectedId === m.id}
-              onClick={() => setSelectedId(m.id)}
-            />
+            <Fragment key={m.id}>
+              <McqRow
+                mcq={m}
+                active={selectedId === m.id}
+                // Below lg the row IS a disclosure control (it carries aria-expanded), and activating an
+                // expanded disclosure has to collapse it. At lg it stays a selection list, where clicking
+                // the selected row again closing the panel would be surprising.
+                onClick={(el) => selectRow(!isDesktop && selectedId === m.id ? null : m.id, el)}
+                controls={!isDesktop ? "mcq-detail-inline" : undefined}
+              />
+              {/* Below lg the answer belongs under the question that was tapped — including the
+                  spinner and the error card, which would otherwise strand a slow connection at the
+                  bottom of the list. At lg this is never rendered; the right-hand column is. */}
+              {!isDesktop && selectedId === m.id && detailNode && (
+                <div id="mcq-detail-inline" data-testid="mcq-detail-inline">{detailNode}</div>
+              )}
+            </Fragment>
           ))}
+          {/* The selection survives paging and filtering, so the open question can be off the current
+              page entirely. Its card then parks after the last row rather than vanishing. */}
+          {!isDesktop && selectedId && detailNode && !items.some((m) => m.id === selectedId) && (
+            <div id="mcq-detail-inline" data-testid="mcq-detail-inline">{detailNode}</div>
+          )}
 
           {/* Pager */}
           {total > PAGE_SIZE && (
@@ -390,29 +568,27 @@ export default function MCQsPage() {
           )}
         </div>
 
-        <div className="min-w-0">
-          {selectedId && detailQuery.data ? (
-            <McqDetail mcq={detailQuery.data} onClose={() => setSelectedId(null)} />
-          ) : selectedId && detailQuery.isLoading ? (
-            <Card><CardContent className="py-8 flex items-center justify-center text-sm text-muted-foreground gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-            </CardContent></Card>
-          ) : selectedId && detailQuery.isError ? (
-            // With a row SELECTED and its fetch failed, falling through to
-            // "Select an MCQ…" pretended nothing was clicked — and the cached
-            // error made re-clicking the row a silent no-op.
-            <Card><CardContent className="py-8 text-center text-sm text-amber-600 dark:text-amber-400" data-testid="mcq-detail-error">
-              Couldn't load this MCQ — refresh to retry.
-            </CardContent></Card>
-          ) : (
-            <Card className="border-dashed">
-              <CardContent className="py-10 text-center text-sm text-muted-foreground" data-testid="text-detail-placeholder">
-                Select an MCQ to see full stem, options, answer, and reasoning.
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        {/* The right-hand column exists only at lg. Below it the whole column is dropped: the card is
+            inline in the list above, and the "Select an MCQ…" placeholder only ever existed to fill an
+            empty second column, which a phone does not have. */}
+        {isDesktop && (
+          <div className="min-w-0" data-testid="mcq-detail-column">
+            {detailNode ?? (
+              <Card className="border-dashed">
+                <CardContent className="py-10 text-center text-sm text-muted-foreground" data-testid="text-detail-placeholder">
+                  Select an MCQ to see full stem, options, answer, and reasoning.
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Outside the detail card on purpose — see McqDetail. Radix portals the dialog, so mounting it here
+          costs nothing in layout and means a rotation across lg cannot discard an in-progress edit. */}
+      {detailQuery.data && (
+        <McqEditDialog mcq={detailQuery.data} open={editOpen} onOpenChange={setEditOpen} />
+      )}
     </div>
   );
 }
