@@ -117,6 +117,27 @@ describe("MCQ figures", () => {
     expect(q!.reason).toMatch(/zero fresh gas flow/i);
   });
 
+  // A refresh copies the tracker's bank over server/data/mcqs.json wholesale,
+  // and the tracker has no plates: its explanation for a plate question reasons
+  // about the apparatus in general and cannot say what point D on OUR drawing
+  // is. On 2026-09-10 that silently replaced three of them. This is the guard —
+  // it fails until `node corpus/apply-figure-explanations.mjs` has been run.
+  it("keeps this site's own explanations for the plate questions across a corpus refresh", () => {
+    const overlay = JSON.parse(
+      fs.readFileSync(path.resolve(import.meta.dirname, "../../corpus/figure-explanations.json"), "utf-8"),
+    ).explanations as Record<string, string>;
+    const ids = Object.keys(overlay);
+    expect(ids.length).toBeGreaterThanOrEqual(3);
+    for (const id of ids) {
+      const q = getMcq(id);
+      expect(q, `${id} is named in corpus/figure-explanations.json but not in the corpus`).toBeTruthy();
+      expect(
+        q!.reason,
+        `${id}: the shipped explanation is not the one written against the plate — run: node corpus/apply-figure-explanations.mjs`,
+      ).toBe(overlay[id]);
+    }
+  });
+
   it("does not describe the phentolamine effect as a cardiac function curve", () => {
     // The shipped plate is a VASCULAR function curve; the sibling question's
     // stored explanation used to name the wrong curve entirely.
